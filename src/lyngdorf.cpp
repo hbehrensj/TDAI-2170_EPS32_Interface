@@ -127,7 +127,12 @@ void lyngdorfLoop() {
     if (rawSink) rawSink(&b, 1);          // transparent forward to TCP client(s)
 
     if (b == '\r' || b == '\n') {
-      if (lineBuf.length()) { lyngLogAdd("<< " + lineBuf); parseLine(lineBuf); lineBuf = ""; }
+      if (lineBuf.length()) {
+        lyngLogAdd("<< " + lineBuf);
+        Serial.printf("[lyng] << %s\n", lineBuf.c_str());   // echo amp replies to USB
+        parseLine(lineBuf);
+        lineBuf = "";
+      }
     } else {
       lineBuf += (char)b;
       if (lineBuf.length() > 250) lineBuf = "";  // overflow guard

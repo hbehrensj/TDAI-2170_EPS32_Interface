@@ -35,6 +35,25 @@ static void statusLedLoop() {
   }
 }
 
+// USB serial debug console: type a line (e.g. !PWR?) to send it to the amp.
+// Works even without WiFi — ideal for bench bring-up. Amp replies print as "<< ...".
+static void serialConsoleLoop() {
+  static String cmd;
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\r' || c == '\n') {
+      if (cmd.length()) {
+        Serial.printf("[console] sending: %s\n", cmd.c_str());
+        lyngdorfSend(cmd);
+        cmd = "";
+      }
+    } else {
+      cmd += c;
+      if (cmd.length() > 200) cmd = "";
+    }
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -62,6 +81,7 @@ void setup() {
 }
 
 void loop() {
+  serialConsoleLoop();
   netConfigLoop();
   lyngdorfLoop();
   tcpBridgeLoop();

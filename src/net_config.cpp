@@ -89,32 +89,44 @@ void netConfigBegin() {
 
   bool buttonHeld = (digitalRead(CONFIG_BUTTON_PIN) == LOW);
 
-  // Fast path: connect directly using credentials from secrets.h (bring-up).
-  // BOOT held always forces the portal instead.
-  bool connected = false;
 #ifdef WIFI_SSID
-  if (!buttonHeld && strlen(WIFI_SSID) > 0) {
+  bool haveSecrets = (strlen(WIFI_SSID) > 0);
+#else
+  bool haveSecrets = false;
+#endif
+
+  bool connected = false;
+  if (buttonHeld) {
+    runPortal(true);                       // explicit: always open the portal
+    connected = (WiFi.status() == WL_CONNECTED);
+  } else if (haveSecrets) {
+#ifdef WIFI_SSID
+    // Bring-up fast path. On failure we DO NOT open the blocking portal, so the
+    // device still reaches loop() and the USB serial console stays usable.
     Serial.printf("[net] secrets.h: connecting directly to '%s'\n", WIFI_SSID);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     uint32_t t0 = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
     connected = (WiFi.status() == WL_CONNECTED);
-    Serial.println(connected ? "[net] secrets.h connect OK"
-                             : "[net] secrets.h connect failed -> portal");
-  }
+    if (!connected)
+      Serial.println("[net] secrets.h connect FAILED — running offline "
+                     "(USB serial console still works for bench debugging)");
 #endif
-  if (!connected) runPortal(buttonHeld);
-
-  // Advertise as <hostname>.local so the device is reachable by name.
-  if (MDNS.begin(MDNS_HOSTNAME)) {
-    MDNS.addService("http", "tcp", MCP_HTTP_PORT);
-    Serial.printf("[net] mDNS: http://%s.local/\n", MDNS_HOSTNAME);
   } else {
-    Serial.println("[net] mDNS start failed");
+    runPortal(false);                      // no secrets: captive portal
+    connected = (WiFi.status() == WL_CONNECTED);
   }
 
-  Serial.printf("[net] connected: %s  IP=%s\n",
-                WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+  if (connected) {
+    if (MDNS.begin(MDNS_HOSTNAME)) {
+      MDNS.addService("http", "tcp", MCP_HTTP_PORT);
+      Serial.printf("[net] mDNS: http://%s.local/\n", MDNS_HOSTNAME);
+    }
+    Serial.printf("[net] connected: %s  IP=%s\n",
+                  WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+  } else {
+    Serial.println("[net] OFFLINE — no WiFi; web/MQTT/MCP unavailable, USB console active");
+  }
 }
 
 void netConfigLoop() {
