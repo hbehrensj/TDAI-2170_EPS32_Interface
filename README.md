@@ -104,15 +104,45 @@ Config mode is entered when:
 - [ ] High-level MCP tools mapped to TDAI-2170 commands (power, volume, source, voicing)
 - [ ] Status LED indicating mode (config / connecting / connected)
 
+## Project layout
+
+```
+platformio.ini          PlatformIO config (board: lolin_s2_mini)
+docs/serial-protocol.md  Full TDAI-2170 RS232 command reference
+src/
+  config.h              Pins, ports, MQTT/HA identity
+  main.cpp              Boot/loop orchestration + status LED
+  net_config.*          WiFi connect + captive portal (BOOT button) + NVS
+  lyngdorf.*            UART driver + '!' protocol parser + state
+  tcp_bridge.*          Raw TCP<->UART bridge on port 4001
+  mqtt_ha.*             MQTT client + Home Assistant discovery
+  mcp_server.*          MCP server (JSON-RPC over HTTP) at /mcp
+```
+
 ## Getting started
 
-> Build instructions will be added once the toolchain is chosen
-> (Arduino IDE / PlatformIO / ESP-IDF).
+Built with [PlatformIO](https://platformio.org/).
 
 ```bash
-# Example (PlatformIO)
-pio run --target upload
+pio run                 # compile
+pio run --target upload # flash over USB
+pio device monitor      # serial logs (115200)
 ```
+
+### First-time setup
+
+1. Flash and power the board. On first boot (no stored WiFi) it starts a
+   captive-portal AP named **`TDAI2170-Setup`**.
+2. Connect to that AP, open the portal, and enter your **WiFi** credentials plus
+   the **MQTT broker** host/port/user/password (for Home Assistant).
+3. The device saves the settings to NVS, reboots, and connects. To re-enter setup
+   later, **hold the BOOT button (~3 s)**.
+
+### Endpoints once connected
+
+- **TCP `:4001`** — point the official Lyngdorf app here (raw serial bridge).
+- **HTTP `:80` `/mcp`** — MCP JSON-RPC endpoint for AI agents / MCP clients.
+- **MQTT** — Home Assistant auto-discovers Power, Mute, Volume and Source entities.
 
 ## Status
 

@@ -1,0 +1,27 @@
+#pragma once
+// Central hardware / network configuration for the TDAI-2170 interface.
+
+// ---- UART to the TTL<->RS232 converter (-> RJ12 -> Lyngdorf) -------------
+#define LYNGDORF_TX_PIN     17        // ESP32 GPIO 17 -> converter TXD (TTL)
+#define LYNGDORF_RX_PIN     18        // ESP32 GPIO 18 -> converter RXD (TTL)
+#define LYNGDORF_BAUD       115200    // TDAI-2170 fixed: 115200 8N1
+#define LYNGDORF_UART_NUM   1         // use UART1 (UART0 is USB CDC on S2)
+
+// ---- Buttons / LED -------------------------------------------------------
+// The LOLIN S2 Mini exposes the BOOT button on GPIO 0 (active LOW).
+#define CONFIG_BUTTON_PIN   0
+#define CONFIG_HOLD_MS      3000      // hold BOOT this long to enter WiFi setup
+
+// Built-in LED. NOTE: verify the pin for your exact board revision.
+#define STATUS_LED_PIN      15
+#define STATUS_LED_ACTIVE_HIGH 1
+
+// ---- Network services ----------------------------------------------------
+#define TCP_BRIDGE_PORT     4001      // raw TCP<->UART bridge (Lyngdorf app)
+#define MCP_HTTP_PORT       80        // MCP server (Streamable HTTP / JSON-RPC)
+#define WIFI_AP_NAME        "TDAI2170-Setup"
+
+// MQTT / Home Assistant identity
+#define HA_NODE_ID          "tdai2170"
+#define HA_DEVICE_NAME      "Lyngdorf TDAI-2170"
+#define HA_DISCOVERY_PREFIX "homeassistant"
