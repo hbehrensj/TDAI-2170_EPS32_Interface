@@ -25,3 +25,13 @@
 #define HA_NODE_ID          "tdai2170"
 #define HA_DEVICE_NAME      "Lyngdorf TDAI-2170"
 #define HA_DISCOVERY_PREFIX "homeassistant"
+
+// mDNS hostname -> reachable as http://<MDNS_HOSTNAME>.local/
+#define MDNS_HOSTNAME       HA_NODE_ID
+
+// ---- Debug web UI --------------------------------------------------------
+// Browser-based debug page at "/" (state, live UART log, command box).
+// Disable in production with build flag  -D ENABLE_DEBUG_WEB=0
+#ifndef ENABLE_DEBUG_WEB
+#define ENABLE_DEBUG_WEB    1
+#endif

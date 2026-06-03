@@ -1,6 +1,7 @@
 #include "mcp_server.h"
 #include "config.h"
 #include "lyngdorf.h"
+#include "debug_web.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
@@ -165,10 +166,14 @@ static void handleMcp() {
 
 void mcpBegin() {
   server.on("/mcp", HTTP_POST, handleMcp);
+#if ENABLE_DEBUG_WEB
+  debugWebRegister(server);   // adds "/" debug UI + /api/* on the same server
+#else
   server.on("/", HTTP_GET, []() {
     server.send(200, "text/plain",
                 "TDAI-2170 MCP server. POST JSON-RPC to /mcp");
   });
+#endif
   server.begin();
   Serial.printf("[mcp] HTTP server on :%d  (POST /mcp)\n", MCP_HTTP_PORT);
 }

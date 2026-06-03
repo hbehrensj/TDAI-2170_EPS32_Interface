@@ -15,6 +15,13 @@ void tcpBridgeBegin() {
   Serial.printf("[tcp] bridge listening on :%d\n", TCP_BRIDGE_PORT);
 }
 
+int tcpBridgeClientCount() {
+  int n = 0;
+  for (int i = 0; i < MAX_CLIENTS; i++)
+    if (clients[i] && clients[i].connected()) n++;
+  return n;
+}
+
 void tcpBridgePush(const uint8_t* data, size_t len) {
   for (int i = 0; i < MAX_CLIENTS; i++)
     if (clients[i] && clients[i].connected())

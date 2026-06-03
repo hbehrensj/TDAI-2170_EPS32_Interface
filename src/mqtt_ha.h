@@ -9,3 +9,4 @@
 void mqttBegin();
 void mqttLoop();
 void mqttPublishState();   // registered as the Lyngdorf state callback
+bool mqttConnected();      // for the debug UI

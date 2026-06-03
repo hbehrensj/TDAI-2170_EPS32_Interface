@@ -11,3 +11,5 @@ void tcpBridgeLoop();
 
 // Registered as the Lyngdorf raw sink: push UART bytes out to TCP clients.
 void tcpBridgePush(const uint8_t* data, size_t len);
+
+int  tcpBridgeClientCount();   // connected clients (for the debug UI)

@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
+#include <ESPmDNS.h>
 
 static Preferences prefs;
 static String   mqttHost;
@@ -81,6 +82,14 @@ void netConfigBegin() {
 
   bool buttonHeld = (digitalRead(CONFIG_BUTTON_PIN) == LOW);
   runPortal(buttonHeld);
+
+  // Advertise as <hostname>.local so the device is reachable by name.
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    MDNS.addService("http", "tcp", MCP_HTTP_PORT);
+    Serial.printf("[net] mDNS: http://%s.local/\n", MDNS_HOSTNAME);
+  } else {
+    Serial.println("[net] mDNS start failed");
+  }
 
   Serial.printf("[net] connected: %s  IP=%s\n",
                 WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());

@@ -133,6 +133,8 @@ static void reconnect() {
   mqttPublishState();
 }
 
+bool mqttConnected() { return mqtt.connected(); }
+
 void mqttBegin() {
   lyngdorfSetStateCallback(mqttPublishState);
   if (netMqttHost().isEmpty())

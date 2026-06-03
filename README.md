@@ -117,6 +117,7 @@ src/
   tcp_bridge.*          Raw TCP<->UART bridge on port 4001
   mqtt_ha.*             MQTT client + Home Assistant discovery
   mcp_server.*          MCP server (JSON-RPC over HTTP) at /mcp
+  debug_web.*           Browser debug UI + /api/* (shares the HTTP server)
 ```
 
 ## Getting started
@@ -138,8 +139,17 @@ pio device monitor      # serial logs (115200)
 3. The device saves the settings to NVS, reboots, and connects. To re-enter setup
    later, **hold the BOOT button (~3 s)**.
 
+### Finding the device
+
+The firmware advertises itself over mDNS/Bonjour, so once connected it is reachable
+by name at **`http://tdai2170.local/`** (works on macOS/iOS, Linux/avahi, Windows 10+).
+The IP is also printed over USB serial at boot, and the DHCP hostname is `tdai2170`.
+
 ### Endpoints once connected
 
+- **HTTP `:80` `/`** — browser **debug UI**: live state, UART protocol log, quick
+  commands and a raw-command box. Great for first-time bring-up. Disable with
+  `-D ENABLE_DEBUG_WEB=0`.
 - **TCP `:4001`** — point the official Lyngdorf app here (raw serial bridge).
 - **HTTP `:80` `/mcp`** — MCP JSON-RPC endpoint for AI agents / MCP clients.
 - **MQTT** — Home Assistant auto-discovers Power, Mute, Volume and Source entities.

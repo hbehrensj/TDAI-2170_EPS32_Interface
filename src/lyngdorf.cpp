@@ -8,6 +8,26 @@ static LyngRawSink  rawSink   = nullptr;
 static LyngStateCb  stateCb   = nullptr;
 static String       lineBuf;
 
+// ---- protocol log ring buffer (for the debug web UI) --------------------
+#define LYNG_LOG_LINES 40
+static String  logBuf[LYNG_LOG_LINES];
+static int     logHead  = 0;   // index of next write
+static int     logCount = 0;
+
+static void lyngLogAdd(const String& s) {
+  logBuf[logHead] = "[" + String(millis() / 1000) + "] " + s;
+  logHead = (logHead + 1) % LYNG_LOG_LINES;
+  if (logCount < LYNG_LOG_LINES) logCount++;
+}
+
+int lyngLogSize() { return logCount; }
+
+String lyngLogLine(int idx) {
+  if (idx < 0 || idx >= logCount) return "";
+  int start = (logHead - logCount + LYNG_LOG_LINES) % LYNG_LOG_LINES;
+  return logBuf[(start + idx) % LYNG_LOG_LINES];
+}
+
 // Appendix A: input source numbering (index 0..17).
 static const char* SOURCE_NAMES[] = {
   "Coax Digital 1", "Coax Digital 2", "Optical Digital 3", "Optical Digital 4",
@@ -50,6 +70,7 @@ void lyngdorfBegin() {
 void lyngdorfSend(const String& cmd) {
   LyngSerial.print(cmd);
   LyngSerial.print("\r\n");
+  lyngLogAdd(">> " + cmd);
   Serial.printf("[lyng] >> %s\n", cmd.c_str());
 }
 
@@ -106,7 +127,7 @@ void lyngdorfLoop() {
     if (rawSink) rawSink(&b, 1);          // transparent forward to TCP client(s)
 
     if (b == '\r' || b == '\n') {
-      if (lineBuf.length()) { parseLine(lineBuf); lineBuf = ""; }
+      if (lineBuf.length()) { lyngLogAdd("<< " + lineBuf); parseLine(lineBuf); lineBuf = ""; }
     } else {
       lineBuf += (char)b;
       if (lineBuf.length() > 250) lineBuf = "";  // overflow guard

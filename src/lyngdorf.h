@@ -35,3 +35,7 @@ const char* lyngSourceName(int n);   // returns "" if out of range
 const char* lyngVoicingName(int n);
 int  lyngSourceIndexByName(const String& name);  // -1 if not found
 float lyngVolumeDb();                            // volume in dB
+
+// Recent protocol traffic (ring buffer) for the debug web UI.
+int    lyngLogSize();          // number of retained lines
+String lyngLogLine(int idx);   // idx 0 = oldest retained, size-1 = newest
