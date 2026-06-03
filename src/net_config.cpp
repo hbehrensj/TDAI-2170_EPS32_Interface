@@ -5,6 +5,13 @@
 #include <Preferences.h>
 #include <ESPmDNS.h>
 
+// Optional local WiFi credentials for direct bring-up (gitignored).
+#if defined(__has_include)
+#  if __has_include("secrets.h")
+#    include "secrets.h"
+#  endif
+#endif
+
 static Preferences prefs;
 static String   mqttHost;
 static String   mqttPortStr = "1883";
@@ -81,7 +88,22 @@ void netConfigBegin() {
   WiFi.setHostname(HA_NODE_ID);
 
   bool buttonHeld = (digitalRead(CONFIG_BUTTON_PIN) == LOW);
-  runPortal(buttonHeld);
+
+  // Fast path: connect directly using credentials from secrets.h (bring-up).
+  // BOOT held always forces the portal instead.
+  bool connected = false;
+#ifdef WIFI_SSID
+  if (!buttonHeld && strlen(WIFI_SSID) > 0) {
+    Serial.printf("[net] secrets.h: connecting directly to '%s'\n", WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
+    connected = (WiFi.status() == WL_CONNECTED);
+    Serial.println(connected ? "[net] secrets.h connect OK"
+                             : "[net] secrets.h connect failed -> portal");
+  }
+#endif
+  if (!connected) runPortal(buttonHeld);
 
   // Advertise as <hostname>.local so the device is reachable by name.
   if (MDNS.begin(MDNS_HOSTNAME)) {

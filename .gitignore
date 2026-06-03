@@ -7,6 +7,9 @@
 .vscode/launch.json
 .vscode/ipch/
 
+# Local secrets (WiFi creds for bring-up) — never commit
+include/secrets.h
+
 # OS / editor
 .DS_Store
 *.swp
