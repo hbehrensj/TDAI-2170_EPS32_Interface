@@ -42,19 +42,28 @@ be entered by pressing a button on the board — see below.
 
 ### Pinout / wiring
 
-ESP32-S2 Mini ←→ TTL↔RS232 converter ←→ RJ12 connector:
+ESP32-S2 Mini ←→ SP3232/MAX3232 converter ←→ RJ12 connector.
 
-| Board label   | Connects to           |
-| ------------- | --------------------- |
-| VCC           | ESP32 3.3V            |
-| GND (TTL)     | ESP32 GND             |
-| TXD (TTL)     | ESP32 GPIO 17 (TX)    |
-| RXD (TTL)     | ESP32 GPIO 18 (RX)    |
-| TXD (RS232)   | RJ12 Pin 6            |
-| RXD (RS232)   | RJ12 Pin 5            |
-| GND (RS232)   | RJ12 Pin 4            |
+The converter's TTL pins follow the **cross convention** (board TXD → MCU RX,
+board RXD → MCU TX), so in firmware the ESP **transmits on GPIO 18** and
+**receives on GPIO 17** (see `LYNGDORF_TX_PIN`/`LYNGDORF_RX_PIN` in
+[src/config.h](src/config.h)). Getting this backwards is silent — nothing works.
 
-> The hardware is built. The ESP32 talks UART (GPIO 17/18) to the converter, which
+| Board label   | Connects to                        |
+| ------------- | ---------------------------------- |
+| VCC           | ESP32 3.3V                         |
+| GND (TTL)     | ESP32 GND                          |
+| TXD (TTL)     | ESP32 GPIO 17  (= firmware **RX**) |
+| RXD (TTL)     | ESP32 GPIO 18  (= firmware **TX**) |
+| TXD (RS232)   | RJ12 Pin 5  (amp Rx, yellow)       |
+| RXD (RS232)   | RJ12 Pin 6  (amp Tx, blue)         |
+| GND (RS232)   | RJ12 Pin 4  (GND, green)           |
+
+RJ12 (amp side, from the manual): **pin 4 = GND (green), pin 5 = Rx (yellow),
+pin 6 = Tx (blue)**, straight (non-crossing) cable.
+
+> The hardware is built and verified end to end (the amp replies, e.g.
+> `!VER?` → `!VER(1.39a)`). The ESP talks UART to the converter, which
 > translates to RS232 and routes it to the RJ12 connector matching the Lyngdorf pinout.
 
 ## Serial protocol

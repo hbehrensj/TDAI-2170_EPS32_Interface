@@ -2,8 +2,12 @@
 // Central hardware / network configuration for the TDAI-2170 interface.
 
 // ---- UART to the TTL<->RS232 converter (-> RJ12 -> Lyngdorf) -------------
-#define LYNGDORF_TX_PIN     17        // ESP32 GPIO 17 -> converter TXD (TTL)
-#define LYNGDORF_RX_PIN     18        // ESP32 GPIO 18 -> converter RXD (TTL)
+// NOTE: the SP3232 board uses the "cross" convention on the TTL side:
+//   board TXD -> MCU RX,  board RXD -> MCU TX.
+// The wiring is ESP17<->board TXD and ESP18<->board RXD, so to talk correctly
+// the ESP must TRANSMIT on 18 (-> board RXD/input) and RECEIVE on 17 (<- board TXD/output).
+#define LYNGDORF_TX_PIN     18        // ESP GPIO 18 -> board RXD (board's TTL input)
+#define LYNGDORF_RX_PIN     17        // ESP GPIO 17 <- board TXD (board's TTL output)
 #define LYNGDORF_BAUD       115200    // TDAI-2170 fixed: 115200 8N1
 #define LYNGDORF_UART_NUM   1         // use UART1 (UART0 is USB CDC on S2)
 
