@@ -111,8 +111,9 @@ Config mode is entered when:
 - [x] mDNS/Bonjour — reachable at `tdai2170.local`
 - [x] TCP server on port 4001 bridging raw bytes to UART (Lyngdorf-app compatible)
 - [x] Embedded MCP server with high-level tools mapped to TDAI-2170 commands
-      (power, volume, source, voicing, raw)
-- [x] Home Assistant MQTT discovery (Power, Mute, Volume, Source entities)
+      (power, mute, absolute/relative volume, source, voicing, RoomPerfect, raw)
+- [x] Home Assistant MQTT discovery (Power, Mute, Volume, Source, Voicing,
+      RoomPerfect entities)
 - [x] Runtime MQTT configuration from the web UI (no recompile / re-portal needed)
 - [x] Browser debug UI with live state + UART log
 - [x] **OTA (over-the-air) firmware updates** over WiFi (espota)

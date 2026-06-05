@@ -46,6 +46,10 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
     <button class="sec" onclick="cmd('!VOLUP')">Vol +</button>
     <button class="sec" onclick="cmd('!SRCDN')">Src &lt;</button>
     <button class="sec" onclick="cmd('!SRCUP')">Src &gt;</button>
+    <button class="sec" onclick="cmd('!VOIDN')">Voi &lt;</button>
+    <button class="sec" onclick="cmd('!VOIUP')">Voi &gt;</button>
+    <button class="sec" onclick="cmd('!RPDN')">RP &lt;</button>
+    <button class="sec" onclick="cmd('!RPUP')">RP &gt;</button>
   </div>
   <div style="margin-top:8px">
     <input id="raw" placeholder="!VOL(-200)" onkeydown="if(event.key=='Enter')sendRaw()">
@@ -92,7 +96,8 @@ async function tick(){
       card('Mute',s.amp.mute)+
       card('Volume',s.amp.volume_db+' dB')+
       card('Source',s.amp.source)+
-      card('Voicing',s.amp.voicing);
+      card('Voicing',s.amp.voicing)+
+      card('RoomPerfect',s.amp.roomperfect);
     let lines=await (await fetch('/api/log')).json();
     let el=document.getElementById('log');
     let atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-10;
@@ -155,6 +160,7 @@ static void handleState(WebServer* s) {
   a["volume_db"] = lyngState.volKnown ? String(lyngVolumeDb(), 1) : "?";
   a["source"]  = lyngState.srcKnown ? lyngSourceName(lyngState.source) : "?";
   a["voicing"] = lyngState.voiKnown ? lyngVoicingName(lyngState.voicing) : "?";
+  a["roomperfect"] = lyngState.rpKnown ? lyngRoomPerfectName(lyngState.rp) : "?";
 
   String out; serializeJson(d, out);
   s->send(200, "application/json", out);

@@ -81,6 +81,9 @@ void setup() {
   lyngdorfSend("!SRC?");
   lyngdorfSend("!MUTE?");
   lyngdorfSend("!VOI?");
+  lyngdorfSend("!RP?");
+  lyngdorfSend("!VER?");
+  lyngdorfSend("!DEVICE?");
 }
 
 void loop() {

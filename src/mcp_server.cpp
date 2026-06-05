@@ -20,6 +20,9 @@ static String toolGetState() {
   d["volume_db"] = lyngState.volKnown ? lyngVolumeDb() : (float)NAN;
   d["source"]  = lyngState.srcKnown ? lyngSourceName(lyngState.source) : "unknown";
   d["voicing"] = lyngState.voiKnown ? lyngVoicingName(lyngState.voicing) : "unknown";
+  d["roomperfect"] = lyngState.rpKnown ? lyngRoomPerfectName(lyngState.rp) : "unknown";
+  if (lyngState.version.length()) d["version"] = lyngState.version;
+  if (lyngState.device.length())  d["device"]  = lyngState.device;
   String out; serializeJson(d, out); return out;
 }
 
@@ -41,6 +44,25 @@ static String toolCall(const String& name, JsonObject args) {
     String dir = args["direction"] | "up";
     lyngdorfSend(dir == "down" ? "!VOLDN" : "!VOLUP");
     return "volume step " + dir;
+  } else if (name == "change_volume") {
+    float db = args["db"] | 0.0f;
+    int raw = (int)roundf(db * 10.0f);          // 0.1 dB units
+    lyngdorfSend("!VOLCH(" + String(raw) + ")");
+    return "volume change " + String(db, 1) + " dB";
+  } else if (name == "set_mute") {
+    String s = args["state"] | "toggle";
+    if (s == "on")  lyngdorfSend("!MUTEON");
+    else if (s == "off") lyngdorfSend("!MUTEOFF");
+    else lyngdorfSend("!MUTE");
+    return "mute -> " + s;
+  } else if (name == "select_roomperfect") {
+    int n = -1;
+    if (args["index"].is<int>()) n = args["index"];
+    else n = lyngRoomPerfectIndexByName(args["name"] | "");
+    String cmd = lyngRoomPerfectCommand(n);
+    if (cmd.isEmpty()) return "error: invalid RoomPerfect position (0=Bypass,1-8=Focus,9=Global)";
+    lyngdorfSend(cmd);
+    return "roomperfect -> " + lyngRoomPerfectName(n);
   } else if (name == "select_source") {
     if (args["index"].is<int>()) {
       int n = args["index"];
@@ -53,7 +75,10 @@ static String toolCall(const String& name, JsonObject args) {
     lyngdorfSend("!SRC(" + String(idx) + ")");
     return "source -> " + nm;
   } else if (name == "select_voicing") {
-    int n = args["index"] | 0;
+    int n;
+    if (args["index"].is<int>()) n = args["index"];
+    else { n = lyngVoicingIndexByName(args["name"] | ""); }
+    if (n < 0) return "error: unknown voicing";
     lyngdorfSend("!VOI(" + String(n) + ")");
     return "voicing -> " + String(lyngVoicingName(n));
   } else if (name == "send_raw") {
@@ -93,13 +118,31 @@ static void buildToolsList(JsonArray tools) {
     p["direction"]["enum"][0] = "up"; p["direction"]["enum"][1] = "down";
     addTool(tools, "volume_step", "Step volume up/down by 0.5 dB", s); }
   { JsonDocument s; s["type"] = "object";
+    s["properties"]["db"]["type"] = "number";
+    s["required"][0] = "db";
+    addTool(tools, "change_volume", "Change volume by a relative amount in dB (e.g. -3.0)", s); }
+  { JsonDocument s; s["type"] = "object";
+    JsonObject p = s["properties"].to<JsonObject>();
+    p["state"]["type"] = "string";
+    p["state"]["enum"][0] = "on"; p["state"]["enum"][1] = "off";
+    p["state"]["enum"][2] = "toggle";
+    addTool(tools, "set_mute", "Mute/unmute/toggle the amplifier", s); }
+  { JsonDocument s; s["type"] = "object";
     JsonObject p = s["properties"].to<JsonObject>();
     p["index"]["type"] = "integer";
     p["name"]["type"] = "string";
     addTool(tools, "select_source", "Select input source by index (0-17) or name", s); }
   { JsonDocument s; s["type"] = "object";
-    s["properties"]["index"]["type"] = "integer";
-    addTool(tools, "select_voicing", "Select voicing by index (0-13)", s); }
+    JsonObject p = s["properties"].to<JsonObject>();
+    p["index"]["type"] = "integer";
+    p["name"]["type"] = "string";
+    addTool(tools, "select_voicing", "Select voicing by index (0-13) or name", s); }
+  { JsonDocument s; s["type"] = "object";
+    JsonObject p = s["properties"].to<JsonObject>();
+    p["index"]["type"] = "integer";
+    p["name"]["type"] = "string";
+    addTool(tools, "select_roomperfect",
+            "Select RoomPerfect position by index (0=Bypass, 1-8=Focus, 9=Global) or name", s); }
   { JsonDocument s; s["type"] = "object";
     s["properties"]["command"]["type"] = "string";
     s["required"][0] = "command";

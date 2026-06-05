@@ -55,7 +55,35 @@ int lyngSourceIndexByName(const String& name) {
     if (name.equalsIgnoreCase(SOURCE_NAMES[i])) return i;
   return -1;
 }
+int lyngVoicingIndexByName(const String& name) {
+  for (int i = 0; i < VOICING_COUNT; i++)
+    if (name.equalsIgnoreCase(VOICING_NAMES[i])) return i;
+  return -1;
+}
 float lyngVolumeDb() { return lyngState.volume / 10.0f; }
+
+// RoomPerfect: 0=Bypass, 1-8=Focus N, 9=Global.
+String lyngRoomPerfectName(int n) {
+  if (n == 0) return "Bypass";
+  if (n >= 1 && n <= 8) return "Focus " + String(n);
+  if (n == 9) return "Global";
+  return "";
+}
+int lyngRoomPerfectIndexByName(const String& name) {
+  if (name.equalsIgnoreCase("Bypass")) return 0;
+  if (name.equalsIgnoreCase("Global")) return 9;
+  if (name.startsWith("Focus") || name.startsWith("focus")) {
+    int n = name.substring(5).toInt();
+    if (n >= 1 && n <= 8) return n;
+  }
+  return -1;
+}
+String lyngRoomPerfectCommand(int n) {
+  if (n == 0) return "!RPBP";
+  if (n >= 1 && n <= 8) return "!RPFOC(" + String(n) + ")";
+  if (n == 9) return "!RPGLOB";
+  return "";
+}
 
 void lyngdorfSetRawSink(LyngRawSink sink)   { rawSink = sink; }
 void lyngdorfSetStateCallback(LyngStateCb cb) { stateCb = cb; }
@@ -116,6 +144,14 @@ static void parseLine(String s) {
     int n = val.toInt();
     changed = !lyngState.voiKnown || lyngState.voicing != n;
     lyngState.voicing = n; lyngState.voiKnown = true;
+  } else if (key == "RP") {
+    int n = val.toInt();
+    changed = !lyngState.rpKnown || lyngState.rp != n;
+    lyngState.rp = n; lyngState.rpKnown = true;
+  } else if (key == "VER") {
+    lyngState.version = val;
+  } else if (key == "DEVICE") {
+    lyngState.device = val;
   }
 
   if (changed && stateCb) stateCb();

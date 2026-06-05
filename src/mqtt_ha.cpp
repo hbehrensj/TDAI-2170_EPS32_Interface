@@ -73,6 +73,26 @@ static void publishDiscovery() {
     for (int i = 0; i < 18; i++) opts.add(lyngSourceName(i));
     publishConfig("select", "source", d);
   }
+  {  // Voicing select
+    JsonDocument d;
+    d["name"] = "Voicing";
+    d["command_topic"] = tCmd("voicing");
+    d["state_topic"]   = tState("voicing");
+    JsonArray opts = d["options"].to<JsonArray>();
+    for (int i = 0; i < 14; i++) opts.add(lyngVoicingName(i));
+    publishConfig("select", "voicing", d);
+  }
+  {  // RoomPerfect select
+    JsonDocument d;
+    d["name"] = "RoomPerfect";
+    d["command_topic"] = tCmd("roomperfect");
+    d["state_topic"]   = tState("roomperfect");
+    JsonArray opts = d["options"].to<JsonArray>();
+    opts.add(lyngRoomPerfectName(0));                  // Bypass
+    for (int i = 1; i <= 8; i++) opts.add(lyngRoomPerfectName(i));  // Focus 1-8
+    opts.add(lyngRoomPerfectName(9));                  // Global
+    publishConfig("select", "roomperfect", d);
+  }
 }
 
 void mqttPublishState() {
@@ -87,6 +107,11 @@ void mqttPublishState() {
   }
   if (lyngState.srcKnown)
     mqtt.publish(tState("source").c_str(), lyngSourceName(lyngState.source), true);
+  if (lyngState.voiKnown)
+    mqtt.publish(tState("voicing").c_str(), lyngVoicingName(lyngState.voicing), true);
+  if (lyngState.rpKnown)
+    mqtt.publish(tState("roomperfect").c_str(),
+                 lyngRoomPerfectName(lyngState.rp).c_str(), true);
 }
 
 static void onMessage(char* topic, byte* payload, unsigned int len) {
@@ -104,6 +129,12 @@ static void onMessage(char* topic, byte* payload, unsigned int len) {
   } else if (t == tCmd("source")) {
     int idx = lyngSourceIndexByName(msg);
     if (idx >= 0) lyngdorfSend("!SRC(" + String(idx) + ")");
+  } else if (t == tCmd("voicing")) {
+    int idx = lyngVoicingIndexByName(msg);
+    if (idx >= 0) lyngdorfSend("!VOI(" + String(idx) + ")");
+  } else if (t == tCmd("roomperfect")) {
+    String cmd = lyngRoomPerfectCommand(lyngRoomPerfectIndexByName(msg));
+    if (cmd.length()) lyngdorfSend(cmd);
   }
 }
 
@@ -137,6 +168,8 @@ static void reconnect() {
   mqtt.subscribe(tCmd("mute").c_str());
   mqtt.subscribe(tCmd("volume").c_str());
   mqtt.subscribe(tCmd("source").c_str());
+  mqtt.subscribe(tCmd("voicing").c_str());
+  mqtt.subscribe(tCmd("roomperfect").c_str());
   publishDiscovery();
   mqttPublishState();
 }

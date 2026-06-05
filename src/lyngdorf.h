@@ -10,6 +10,9 @@ struct LyngdorfState {
   bool volKnown   = false;  int  volume = 0;   // raw value, 0.1 dB units (-999..120)
   bool srcKnown   = false;  int  source = -1;  // 0..17, see Appendix A
   bool voiKnown   = false;  int  voicing = -1; // 0..13, see Appendix B
+  bool rpKnown    = false;  int  rp = -1;      // RoomPerfect: 0=Bypass,1-8=Focus,9=Global
+  String version;                              // !VER reply
+  String device;                              // !DEVICE reply
 };
 
 extern LyngdorfState lyngState;
@@ -33,8 +36,15 @@ void lyngdorfSetStateCallback(LyngStateCb cb);
 // Convenience helpers for the higher layers.
 const char* lyngSourceName(int n);   // returns "" if out of range
 const char* lyngVoicingName(int n);
-int  lyngSourceIndexByName(const String& name);  // -1 if not found
-float lyngVolumeDb();                            // volume in dB
+int  lyngSourceIndexByName(const String& name);   // -1 if not found
+int  lyngVoicingIndexByName(const String& name);  // -1 if not found
+float lyngVolumeDb();                             // volume in dB
+
+// RoomPerfect position 0=Bypass, 1-8=Focus N, 9=Global. Helpers map to/from
+// the names used by Home Assistant select / MCP tools.
+String lyngRoomPerfectName(int n);                // "" if out of range
+int    lyngRoomPerfectIndexByName(const String& name);  // -1 if not found
+String lyngRoomPerfectCommand(int n);             // serial command for position n
 
 // Recent protocol traffic (ring buffer) for the debug web UI.
 int    lyngLogSize();          // number of retained lines
