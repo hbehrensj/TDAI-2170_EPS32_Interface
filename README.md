@@ -235,4 +235,16 @@ for update**), which shows the current version on the status grid.
 
 ## License
 
-Not yet decided.
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You are free
+to use, modify, and share this project for **any noncommercial purpose** —
+personal and hobby use, education, research, and nonprofit/government
+organizations. See the license for the exact terms.
+
+> **Note:** this is a *source-available*, noncommercial license, not an OSI
+> open-source license — commercial use is **not** granted by it.
+
+**Commercial use?** A separate commercial license is available. Open an issue or
+contact the author ([@hbehrensj](https://github.com/hbehrensj)) to discuss terms.
+
+Third-party libraries (WiFiManager, PubSubClient, ArduinoJson) remain under their
+own permissive licenses.
