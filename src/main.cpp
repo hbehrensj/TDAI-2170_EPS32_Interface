@@ -6,6 +6,7 @@
 #include "mqtt_ha.h"
 #include "mcp_server.h"
 #include "ota.h"
+#include "selfupdate.h"
 
 // ---- Status LED ----------------------------------------------------------
 // Simple non-blocking blink. Pattern conveys the current state.
@@ -58,7 +59,7 @@ static void serialConsoleLoop() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\n[TDAI2170] boot");
+  Serial.printf("\n[TDAI2170] boot  fw=%s\n", FIRMWARE_VERSION_STR);
 
   statusLedBegin();
   lyngdorfBegin();
@@ -86,6 +87,7 @@ void loop() {
   serialConsoleLoop();
   netConfigLoop();
   otaLoop();
+  selfUpdateLoop();
   lyngdorfLoop();
   tcpBridgeLoop();
   mqttLoop();

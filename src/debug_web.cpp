@@ -3,6 +3,7 @@
 #include "lyngdorf.h"
 #include "mqtt_ha.h"
 #include "net_config.h"
+#include "selfupdate.h"
 #include "tcp_bridge.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -66,6 +67,13 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
       <span id="mqtt_msg" style="margin-left:10px;font-size:13px"></span>
     </div>
   </div>
+
+  <h3>Firmware update</h3>
+  <div class="card">
+    <button onclick="checkUpdate()">Check GitHub for update</button>
+    <span id="upd_msg" style="margin-left:10px;font-size:13px"></span>
+    <div class="k" style="margin-top:8px">Pulls the latest release; reboots if a newer version is found.</div>
+  </div>
 </div>
 <script>
 function cmd(c){fetch('/api/cmd?c='+encodeURIComponent(c))}
@@ -77,6 +85,7 @@ async function tick(){
     document.getElementById('status').innerHTML=
       card('WiFi',s.wifi.ssid+' ('+s.wifi.rssi+' dBm)')+
       card('IP',s.wifi.ip)+
+      card('Firmware',s.fw)+
       card('MQTT',badge(s.mqtt))+
       card('TCP clients',s.tcp_clients)+
       card('Power',s.amp.power)+
@@ -113,6 +122,14 @@ async function saveMqtt(){
     el.className=r.ok?'ok':'bad'; mqtt_pass.value='';
   }catch(e){el.textContent='error';el.className='bad';}
 }
+async function checkUpdate(){
+  let el=document.getElementById('upd_msg');
+  el.textContent='checking…'; el.className='';
+  try{
+    let r=await fetch('/api/update',{method:'POST'});
+    el.textContent=await r.text();
+  }catch(e){el.textContent='(rebooting if updating…)';}
+}
 setInterval(tick,1000);tick();loadMqtt();
 </script></body></html>)HTML";
 
@@ -130,6 +147,7 @@ static void handleState(WebServer* s) {
   d["wifi"]["dns"]     = WiFi.dnsIP().toString();
   d["mqtt"]         = mqttConnected();
   d["tcp_clients"]  = tcpBridgeClientCount();
+  d["fw"]           = FIRMWARE_VERSION_STR;
 
   JsonObject a = d["amp"].to<JsonObject>();
   a["power"]   = lyngState.powerKnown ? (lyngState.power ? "on" : "off") : "?";
@@ -190,6 +208,12 @@ static void handleMqttSet(WebServer* s) {
   s->send(200, "text/plain", "ok");
 }
 
+static void handleUpdate(WebServer* s) {
+  // Blocks while checking/downloading; reboots on success (response may not
+  // arrive in that case, which is expected).
+  s->send(200, "text/plain", selfUpdateCheckNow());
+}
+
 void debugWebRegister(WebServer& server) {
   server.on("/", HTTP_GET, [&server]() { handleRoot(&server); });
   server.on("/api/state", HTTP_GET, [&server]() { handleState(&server); });
@@ -198,6 +222,7 @@ void debugWebRegister(WebServer& server) {
   server.on("/api/nettest", HTTP_GET, [&server]() { handleNetTest(&server); });
   server.on("/api/mqtt", HTTP_GET, [&server]() { handleMqttGet(&server); });
   server.on("/api/mqtt", HTTP_POST, [&server]() { handleMqttSet(&server); });
+  server.on("/api/update", HTTP_POST, [&server]() { handleUpdate(&server); });
 }
 
 #endif  // ENABLE_DEBUG_WEB

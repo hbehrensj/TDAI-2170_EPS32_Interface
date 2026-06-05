@@ -1,0 +1,43 @@
+name: Build & Release firmware
+
+# Tag a commit to publish a release the devices can self-update to:
+#   git tag v1.5.0 && git push origin v1.5.0
+# The tag (minus the leading "v") becomes the firmware version and the
+# version.json that on-device self-update compares against.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build firmware (version from tag)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Building firmware version $VERSION"
+          PLATFORMIO_BUILD_FLAGS="-DFIRMWARE_VERSION=$VERSION" pio run -e lolin_s2_mini
+          mkdir -p dist
+          cp .pio/build/lolin_s2_mini/firmware.bin dist/firmware.bin
+          printf '{"version":"%s"}\n' "$VERSION" > dist/version.json
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/firmware.bin
+            dist/version.json

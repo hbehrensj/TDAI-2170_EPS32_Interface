@@ -39,6 +39,27 @@
 #define OTA_PASSWORD        "tdai2170-ota"
 #endif
 
+// ---- Firmware version + self-update from GitHub releases -----------------
+// The release CI injects the git tag with  -D FIRMWARE_VERSION=1.5.0  (no
+// quotes); FIRMWARE_VERSION_STR stringifies it. Local/dev builds use the
+// default below.
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION_STR "1.4.0"
+#else
+#define FW_STR2(x) #x
+#define FW_STR(x)  FW_STR2(x)
+#define FIRMWARE_VERSION_STR FW_STR(FIRMWARE_VERSION)
+#endif
+
+// Stable "latest release" asset URLs (always point at the newest release).
+#define UPDATE_VERSION_URL \
+  "https://github.com/hbehrensj/TDAI-2170_EPS32_Interface/releases/latest/download/version.json"
+#define UPDATE_FIRMWARE_URL \
+  "https://github.com/hbehrensj/TDAI-2170_EPS32_Interface/releases/latest/download/firmware.bin"
+
+// How often the device auto-checks GitHub for a newer release.
+#define UPDATE_CHECK_INTERVAL_MS  (24UL * 60 * 60 * 1000)   // daily
+
 // ---- Debug web UI --------------------------------------------------------
 // Browser-based debug page at "/" (state, live UART log, command box).
 // Disable in production with build flag  -D ENABLE_DEBUG_WEB=0

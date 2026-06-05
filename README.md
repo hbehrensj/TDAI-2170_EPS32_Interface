@@ -117,7 +117,7 @@ Config mode is entered when:
 - [x] Browser debug UI with live state + UART log
 - [x] **OTA (over-the-air) firmware updates** over WiFi (espota)
 - [x] Status LED indicating mode (config / connecting / connected)
-- [ ] Self-update from GitHub releases (see *Releases & self-update* below)
+- [x] **Self-update from GitHub releases** (see *Releases & self-update* below)
 
 ## Project layout
 
@@ -134,6 +134,7 @@ src/
   mcp_server.*          MCP server (JSON-RPC over HTTP) at /mcp
   debug_web.*           Browser debug UI + /api/* (shares the HTTP server)
   ota.*                 Over-the-air firmware updates (espota)
+  selfupdate.*          Self-update from GitHub releases (HTTPUpdate over TLS)
 ```
 
 `include/secrets.h` (gitignored) can hold a hardcoded WiFi SSID/password for
@@ -188,14 +189,38 @@ The IP is also printed over USB serial at boot, and the DHCP hostname is `tdai21
 
 Two distinct mechanisms — don't confuse them:
 
-- **espota (implemented)** — *push* updates from your machine on the LAN with
+- **espota** — *push* updates from your machine on the LAN with
   `pio run -e ota -t upload`. You initiate the flash; the device is the target.
-- **Self-update from GitHub (planned)** — the device *pulls* a new firmware
-  image itself. This needs (1) a CI workflow that builds `firmware.bin` and a
-  small `version.json` manifest and attaches them to a GitHub Release, and
-  (2) on-device code (ESP32 `HTTPUpdate` over TLS) that periodically checks the
-  manifest and downloads the binary when a newer version is published. See the
-  checklist item above; not yet built.
+- **Self-update from GitHub** — the device *pulls* new firmware itself over the
+  internet, no PC needed.
+
+### Cutting a release
+
+The CI workflow [`.github/workflows/release.yml`](.github/workflows/release.yml)
+builds and publishes a release whenever you push a `v*` tag:
+
+```bash
+git tag v1.5.0
+git push origin v1.5.0
+```
+
+It compiles the firmware (injecting the tag as `FIRMWARE_VERSION`) and attaches
+two assets to the GitHub Release: `firmware.bin` and `version.json`
+(`{"version":"1.5.0"}`). The "latest release" URLs are stable, so devices always
+look at the newest one.
+
+### How devices update themselves
+
+On boot (after ~30 s) and then once a day, the device fetches `version.json`
+from the latest release, compares it to its own compiled version, and if a newer
+version is published it downloads `firmware.bin` over HTTPS and reboots into it
+(`src/selfupdate.*`, ESP32 `HTTPUpdate`). You can also trigger a check manually
+from the web UI (`http://tdai2170.local/` → *Firmware update* → **Check GitHub
+for update**), which shows the current version on the status grid.
+
+> TLS uses `setInsecure()` (no certificate pinning) for simplicity — fine on a
+> trusted home network. The firmware build is ~85 % of the app partition once
+> the TLS/HTTPUpdate stack is included.
 
 ## Status
 
@@ -204,8 +229,7 @@ Two distinct mechanisms — don't confuse them:
 - ✅ Hardware built (ESP32-S2 + TTL↔RS232 + RJ12), amp verified
 - ✅ WiFi bridge (TCP :4001), captive-portal config, mDNS, auto-reconnect
 - ✅ MCP server (`/mcp`), Home Assistant MQTT discovery, browser debug UI
-- ✅ OTA firmware updates (espota)
-- ⏳ Self-update from GitHub releases
+- ✅ OTA firmware updates (espota) + self-update from GitHub releases
 
 ## License
 
