@@ -179,3 +179,10 @@ void mcpBegin() {
 }
 
 void mcpLoop() { server.handleClient(); }
+
+// Release port 80 so WiFiManager's config portal can bind it when the
+// portal is entered at runtime (after mcpBegin() has already started).
+void mcpStop() {
+  server.stop();
+  Serial.println("[mcp] HTTP server stopped (port 80 released)");
+}

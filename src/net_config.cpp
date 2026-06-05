@@ -1,5 +1,7 @@
 #include "net_config.h"
 #include "config.h"
+#include "mcp_server.h"
+#include "mqtt_ha.h"
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
@@ -13,6 +15,9 @@
 #endif
 
 static Preferences prefs;
+static String   staSsid;        // remembered for the reconnect watchdog
+static String   staPsk;         // (WiFiManager runs with persistent creds off,
+                                //  so WiFi.reconnect() alone can't recover)
 static String   mqttHost;
 static String   mqttPortStr = "1883";
 static String   mqttUser;
@@ -22,6 +27,20 @@ String   netMqttHost() { return mqttHost; }
 uint16_t netMqttPort() { return (uint16_t)mqttPortStr.toInt(); }
 String   netMqttUser() { return mqttUser; }
 String   netMqttPass() { return mqttPass; }
+
+static void saveSettings();  // fwd
+
+void netSetMqtt(const String& host, const String& port,
+                const String& user, const String& pass) {
+  mqttHost    = host;
+  mqttPortStr = port.length() ? port : "1883";
+  mqttUser    = user;
+  if (pass.length()) mqttPass = pass;   // empty -> keep existing password
+  saveSettings();
+  Serial.printf("[net] MQTT settings updated: %s:%s\n",
+                mqttHost.c_str(), mqttPortStr.c_str());
+  mqttApplyConfig();                     // force reconnect with new settings
+}
 
 static void loadSettings() {
   prefs.begin("tdai", true);
@@ -80,6 +99,18 @@ static void runPortal(bool onDemand) {
   }
 }
 
+// (Re)start the mDNS responder on the current STA interface. Safe to call
+// again after a network change — must run for tdai2170.local to resolve.
+static void startMdns() {
+  MDNS.end();
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    MDNS.addService("http", "tcp", MCP_HTTP_PORT);
+    Serial.printf("[net] mDNS: http://%s.local/\n", MDNS_HOSTNAME);
+  } else {
+    Serial.println("[net] mDNS start failed");
+  }
+}
+
 void netConfigBegin() {
   pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
   loadSettings();
@@ -118,10 +149,12 @@ void netConfigBegin() {
   }
 
   if (connected) {
-    if (MDNS.begin(MDNS_HOSTNAME)) {
-      MDNS.addService("http", "tcp", MCP_HTTP_PORT);
-      Serial.printf("[net] mDNS: http://%s.local/\n", MDNS_HOSTNAME);
-    }
+    // Remember the live credentials so the watchdog can re-issue WiFi.begin();
+    // WiFi.reconnect() can't recover them because persistent storage is off.
+    staSsid = WiFi.SSID();
+    staPsk  = WiFi.psk();
+    WiFi.setAutoReconnect(true);
+    startMdns();
     Serial.printf("[net] connected: %s  IP=%s\n",
                   WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
   } else {
@@ -136,7 +169,10 @@ void netConfigLoop() {
     if (pressStart == 0) pressStart = millis();
     else if (millis() - pressStart >= CONFIG_HOLD_MS) {
       Serial.println("[net] BOOT held -> entering config portal");
+      mcpStop();          // free port 80 so the portal's web UI can bind it
       runPortal(true);
+      mcpBegin();         // re-bind the MCP/web server after the portal closes
+      if (WiFi.status() == WL_CONNECTED) startMdns();  // re-announce on new net
       pressStart = 0;
     }
   } else {
@@ -145,11 +181,23 @@ void netConfigLoop() {
 
   // Lightweight reconnect watchdog.
   static uint32_t lastCheck = 0;
+  static bool wasConnected = true;
   if (millis() - lastCheck > 5000) {
     lastCheck = millis();
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("[net] WiFi dropped, reconnecting");
-      WiFi.reconnect();
+    bool up = (WiFi.status() == WL_CONNECTED);
+    if (!up) {
+      if (staSsid.length()) {
+        Serial.printf("[net] WiFi dropped, reconnecting to %s\n", staSsid.c_str());
+        WiFi.begin(staSsid.c_str(), staPsk.c_str());  // reconnect() can't; creds not persisted
+      } else {
+        Serial.println("[net] WiFi dropped, reconnecting");
+        WiFi.reconnect();
+      }
+    } else if (!wasConnected) {
+      // Link just came back — re-announce mDNS so tdai2170.local resolves again.
+      Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
+      startMdns();
     }
+    wasConnected = up;
   }
 }

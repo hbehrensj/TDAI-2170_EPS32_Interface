@@ -33,6 +33,12 @@
 // mDNS hostname -> reachable as http://<MDNS_HOSTNAME>.local/
 #define MDNS_HOSTNAME       HA_NODE_ID
 
+// ---- OTA (over-the-air firmware updates) ---------------------------------
+// Password required by espota uploads. Override with -D OTA_PASSWORD=... .
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD        "tdai2170-ota"
+#endif
+
 // ---- Debug web UI --------------------------------------------------------
 // Browser-based debug page at "/" (state, live UART log, command box).
 // Disable in production with build flag  -D ENABLE_DEBUG_WEB=0

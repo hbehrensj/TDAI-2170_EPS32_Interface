@@ -2,6 +2,7 @@
 #include "config.h"
 #include "lyngdorf.h"
 #include "mqtt_ha.h"
+#include "net_config.h"
 #include "tcp_bridge.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -51,6 +52,20 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
   </div>
   <h3>UART log</h3>
   <div id="log"></div>
+
+  <h3>MQTT settings</h3>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center">
+      <label>Host</label><input id="mqtt_host" placeholder="192.168.1.x">
+      <label>Port</label><input id="mqtt_port" placeholder="1883">
+      <label>User</label><input id="mqtt_user" placeholder="(optional)">
+      <label>Password</label><input id="mqtt_pass" type="password" placeholder="(unchanged if blank)">
+    </div>
+    <div style="margin-top:10px">
+      <button onclick="saveMqtt()">Save MQTT</button>
+      <span id="mqtt_msg" style="margin-left:10px;font-size:13px"></span>
+    </div>
+  </div>
 </div>
 <script>
 function cmd(c){fetch('/api/cmd?c='+encodeURIComponent(c))}
@@ -80,7 +95,25 @@ async function tick(){
   }catch(e){}
 }
 function card(k,v){return '<div class=card><div class=k>'+k+'</div><div class=v>'+v+'</div></div>'}
-setInterval(tick,1000);tick();
+async function loadMqtt(){
+  try{
+    let m=await (await fetch('/api/mqtt')).json();
+    mqtt_host.value=m.host; mqtt_port.value=m.port; mqtt_user.value=m.user;
+    mqtt_pass.placeholder=m.has_pass?'(unchanged if blank)':'(none set)';
+  }catch(e){}
+}
+async function saveMqtt(){
+  let b=new URLSearchParams({host:mqtt_host.value,port:mqtt_port.value,
+    user:mqtt_user.value,pass:mqtt_pass.value});
+  let el=document.getElementById('mqtt_msg');
+  try{
+    let r=await fetch('/api/mqtt',{method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});
+    el.textContent=r.ok?'saved ✓ (reconnecting)':'error';
+    el.className=r.ok?'ok':'bad'; mqtt_pass.value='';
+  }catch(e){el.textContent='error';el.className='bad';}
+}
+setInterval(tick,1000);tick();loadMqtt();
 </script></body></html>)HTML";
 
 static void handleRoot(WebServer* s) {
@@ -89,9 +122,12 @@ static void handleRoot(WebServer* s) {
 
 static void handleState(WebServer* s) {
   JsonDocument d;
-  d["wifi"]["ssid"] = WiFi.SSID();
-  d["wifi"]["ip"]   = WiFi.localIP().toString();
-  d["wifi"]["rssi"] = WiFi.RSSI();
+  d["wifi"]["ssid"]    = WiFi.SSID();
+  d["wifi"]["ip"]      = WiFi.localIP().toString();
+  d["wifi"]["rssi"]    = WiFi.RSSI();
+  d["wifi"]["gateway"] = WiFi.gatewayIP().toString();
+  d["wifi"]["subnet"]  = WiFi.subnetMask().toString();
+  d["wifi"]["dns"]     = WiFi.dnsIP().toString();
   d["mqtt"]         = mqttConnected();
   d["tcp_clients"]  = tcpBridgeClientCount();
 
@@ -121,11 +157,47 @@ static void handleCmd(WebServer* s) {
   s->send(200, "text/plain", "ok");
 }
 
+// Active TCP reachability test from the device itself:
+//   /api/nettest?host=192.168.1.80&port=1883
+// Tells us whether the ESP32 (not the browser) can open a socket.
+static void handleNetTest(WebServer* s) {
+  String host = s->arg("host");
+  int    port = s->arg("port").toInt();
+  if (host.isEmpty() || port <= 0) { s->send(400, "text/plain", "need host&port"); return; }
+  WiFiClient c;
+  uint32_t t0 = millis();
+  bool ok = c.connect(host.c_str(), (uint16_t)port, 4000);
+  uint32_t ms = millis() - t0;
+  c.stop();
+  JsonDocument d;
+  d["host"] = host; d["port"] = port; d["connected"] = ok; d["ms"] = ms;
+  String out; serializeJson(d, out);
+  s->send(200, "application/json", out);
+}
+
+static void handleMqttGet(WebServer* s) {
+  JsonDocument d;
+  d["host"]     = netMqttHost();
+  d["port"]     = netMqttPort();
+  d["user"]     = netMqttUser();
+  d["has_pass"] = !netMqttPass().isEmpty();   // never echo the password back
+  String out; serializeJson(d, out);
+  s->send(200, "application/json", out);
+}
+
+static void handleMqttSet(WebServer* s) {
+  netSetMqtt(s->arg("host"), s->arg("port"), s->arg("user"), s->arg("pass"));
+  s->send(200, "text/plain", "ok");
+}
+
 void debugWebRegister(WebServer& server) {
   server.on("/", HTTP_GET, [&server]() { handleRoot(&server); });
   server.on("/api/state", HTTP_GET, [&server]() { handleState(&server); });
   server.on("/api/log", HTTP_GET, [&server]() { handleLog(&server); });
   server.on("/api/cmd", HTTP_GET, [&server]() { handleCmd(&server); });
+  server.on("/api/nettest", HTTP_GET, [&server]() { handleNetTest(&server); });
+  server.on("/api/mqtt", HTTP_GET, [&server]() { handleMqttGet(&server); });
+  server.on("/api/mqtt", HTTP_POST, [&server]() { handleMqttSet(&server); });
 }
 
 #endif  // ENABLE_DEBUG_WEB

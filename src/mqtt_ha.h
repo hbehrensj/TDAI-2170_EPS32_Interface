@@ -10,3 +10,5 @@ void mqttBegin();
 void mqttLoop();
 void mqttPublishState();   // registered as the Lyngdorf state callback
 bool mqttConnected();      // for the debug UI
+void mqttApplyConfig();    // drop the connection so the next loop reconnects
+                           // with freshly saved settings (called after web edit)

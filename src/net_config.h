@@ -18,3 +18,8 @@ String   netMqttHost();
 uint16_t netMqttPort();
 String   netMqttUser();
 String   netMqttPass();
+
+// Update + persist MQTT settings at runtime (from the web UI). An empty
+// `pass` leaves the stored password unchanged. Triggers an MQTT reconnect.
+void netSetMqtt(const String& host, const String& port,
+                const String& user, const String& pass);

@@ -107,9 +107,17 @@ static void onMessage(char* topic, byte* payload, unsigned int len) {
   }
 }
 
+static String mqttServerHost;   // must outlive PubSubClient: setServer(const char*)
+                                // stores the pointer, not a copy.
+
 static void reconnect() {
   if (netMqttHost().isEmpty()) return;
-  mqtt.setServer(netMqttHost().c_str(), netMqttPort());
+  mqttServerHost = netMqttHost();
+  IPAddress ip;
+  if (ip.fromString(mqttServerHost))      // numeric IP -> pass by value (safest)
+    mqtt.setServer(ip, netMqttPort());
+  else                                    // hostname -> keep the String alive
+    mqtt.setServer(mqttServerHost.c_str(), netMqttPort());
   mqtt.setBufferSize(1024);   // HA discovery payloads exceed the 256 default
   mqtt.setCallback(onMessage);
 
@@ -134,6 +142,12 @@ static void reconnect() {
 }
 
 bool mqttConnected() { return mqtt.connected(); }
+
+void mqttApplyConfig() {
+  // Settings already persisted by the caller; drop any live connection so
+  // mqttLoop() reconnects to the new broker (reconnect() re-reads settings).
+  if (mqtt.connected()) mqtt.disconnect();
+}
 
 void mqttBegin() {
   lyngdorfSetStateCallback(mqttPublishState);

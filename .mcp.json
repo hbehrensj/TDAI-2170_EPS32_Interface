@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tdai2170": {
+      "type": "http",
+      "url": "http://tdai2170.local/mcp"
+    }
+  }
+}

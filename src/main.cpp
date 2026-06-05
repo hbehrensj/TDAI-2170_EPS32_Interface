@@ -5,6 +5,7 @@
 #include "tcp_bridge.h"
 #include "mqtt_ha.h"
 #include "mcp_server.h"
+#include "ota.h"
 
 // ---- Status LED ----------------------------------------------------------
 // Simple non-blocking blink. Pattern conveys the current state.
@@ -66,6 +67,7 @@ void setup() {
   netConfigBegin();
   ledMode = LED_CONNECTED;
 
+  otaBegin();         // over-the-air firmware updates (espota)
   tcpBridgeBegin();   // raw TCP<->UART bridge on :4001 (Lyngdorf app)
   mqttBegin();        // Home Assistant via MQTT discovery
   mcpBegin();         // MCP server on :80 (/mcp)
@@ -83,6 +85,7 @@ void setup() {
 void loop() {
   serialConsoleLoop();
   netConfigLoop();
+  otaLoop();
   lyngdorfLoop();
   tcpBridgeLoop();
   mqttLoop();

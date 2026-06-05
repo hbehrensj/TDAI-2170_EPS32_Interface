@@ -2,8 +2,9 @@
 
 A WiFi-to-Serial adapter built on an **ESP32-S2 Mini**, used to control a
 **Lyngdorf TDAI-2170** integrated amplifier over its RS232 serial interface —
-wirelessly over WiFi. The project will be extended with an **embedded MCP server**
-so the amplifier can be controlled directly from an MCP client / AI agent.
+wirelessly over WiFi. It also runs an **embedded MCP server** so the amplifier
+can be controlled directly from an MCP client / AI agent, a **Home Assistant**
+MQTT integration, a browser debug UI, and **over-the-air (OTA) firmware updates**.
 
 ## Goals
 
@@ -103,15 +104,20 @@ Config mode is entered when:
 > natural choice for the "enter WiFi setup" trigger (hold for ~3 s). A status LED pattern
 > indicates which mode the device is in.
 
-## Features (planned)
+## Features
 
-- [ ] WiFi configuration mode (captive-portal AP, triggered by BOOT button on GPIO 0)
-- [ ] Persist WiFi credentials in NVS
-- [ ] TCP server on port 4001 bridging raw bytes to UART (Lyngdorf-app compatible)
-- [ ] Configurable baud rate (default 115200 for TDAI-2170)
-- [ ] Embedded MCP server with tools for serial I/O
-- [ ] High-level MCP tools mapped to TDAI-2170 commands (power, volume, source, voicing)
-- [ ] Status LED indicating mode (config / connecting / connected)
+- [x] WiFi configuration mode (captive-portal AP, triggered by BOOT button on GPIO 0)
+- [x] Persist WiFi credentials in NVS, with an auto-reconnect watchdog
+- [x] mDNS/Bonjour — reachable at `tdai2170.local`
+- [x] TCP server on port 4001 bridging raw bytes to UART (Lyngdorf-app compatible)
+- [x] Embedded MCP server with high-level tools mapped to TDAI-2170 commands
+      (power, volume, source, voicing, raw)
+- [x] Home Assistant MQTT discovery (Power, Mute, Volume, Source entities)
+- [x] Runtime MQTT configuration from the web UI (no recompile / re-portal needed)
+- [x] Browser debug UI with live state + UART log
+- [x] **OTA (over-the-air) firmware updates** over WiFi (espota)
+- [x] Status LED indicating mode (config / connecting / connected)
+- [ ] Self-update from GitHub releases (see *Releases & self-update* below)
 
 ## Project layout
 
@@ -127,7 +133,12 @@ src/
   mqtt_ha.*             MQTT client + Home Assistant discovery
   mcp_server.*          MCP server (JSON-RPC over HTTP) at /mcp
   debug_web.*           Browser debug UI + /api/* (shares the HTTP server)
+  ota.*                 Over-the-air firmware updates (espota)
 ```
+
+`include/secrets.h` (gitignored) can hold a hardcoded WiFi SSID/password for
+bench bring-up; **leave `WIFI_SSID` empty for normal use** so the device uses
+the WiFiManager portal / stored home-network credentials.
 
 ## Getting started
 
@@ -135,9 +146,15 @@ Built with [PlatformIO](https://platformio.org/).
 
 ```bash
 pio run                 # compile
-pio run --target upload # flash over USB
+pio run --target upload # flash over USB (first time)
+pio run -e ota -t upload # flash wirelessly once OTA is on the device
 pio device monitor      # serial logs (115200)
 ```
+
+> **OTA:** after the first USB flash, subsequent updates can be pushed over WiFi
+> with `pio run -e ota -t upload` (targets `tdai2170.local`, password
+> `tdai2170-ota` — override with `-D OTA_PASSWORD=...`). Handy on the ESP32-S2
+> Mini, whose native USB drops its serial port on every reset.
 
 ### First-time setup
 
@@ -147,6 +164,10 @@ pio device monitor      # serial logs (115200)
    the **MQTT broker** host/port/user/password (for Home Assistant).
 3. The device saves the settings to NVS, reboots, and connects. To re-enter setup
    later, **hold the BOOT button (~3 s)**.
+
+> **MQTT can also be (re)configured at runtime** from the web UI at
+> `http://tdai2170.local/` (the *MQTT settings* section) — no portal or reflash
+> needed. Settings persist to NVS and the client reconnects immediately.
 
 ### Finding the device
 
@@ -163,12 +184,28 @@ The IP is also printed over USB serial at boot, and the DHCP hostname is `tdai21
 - **HTTP `:80` `/mcp`** — MCP JSON-RPC endpoint for AI agents / MCP clients.
 - **MQTT** — Home Assistant auto-discovers Power, Mute, Volume and Source entities.
 
+## Releases & self-update
+
+Two distinct mechanisms — don't confuse them:
+
+- **espota (implemented)** — *push* updates from your machine on the LAN with
+  `pio run -e ota -t upload`. You initiate the flash; the device is the target.
+- **Self-update from GitHub (planned)** — the device *pulls* a new firmware
+  image itself. This needs (1) a CI workflow that builds `firmware.bin` and a
+  small `version.json` manifest and attaches them to a GitHub Release, and
+  (2) on-device code (ESP32 `HTTPUpdate` over TLS) that periodically checks the
+  manifest and downloads the binary when a newer version is published. See the
+  checklist item above; not yet built.
+
 ## Status
 
-🚧 Under development.
+🚧 Under development — core firmware working end to end.
 
-- ✅ Hardware built (ESP32-S2 + TTL↔RS232 + RJ12)
-- ⏳ Firmware (WiFi bridge + MCP server)
+- ✅ Hardware built (ESP32-S2 + TTL↔RS232 + RJ12), amp verified
+- ✅ WiFi bridge (TCP :4001), captive-portal config, mDNS, auto-reconnect
+- ✅ MCP server (`/mcp`), Home Assistant MQTT discovery, browser debug UI
+- ✅ OTA firmware updates (espota)
+- ⏳ Self-update from GitHub releases
 
 ## License
 

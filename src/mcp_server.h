@@ -11,3 +11,4 @@
 
 void mcpBegin();
 void mcpLoop();
+void mcpStop();   // release port 80 (e.g. before opening the config portal)
