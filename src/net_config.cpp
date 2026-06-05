@@ -179,24 +179,53 @@ void netConfigLoop() {
     pressStart = 0;
   }
 
-  // Lightweight reconnect watchdog.
-  static uint32_t lastCheck = 0;
-  static bool wasConnected = true;
+  // Escalating reconnect watchdog. A plain WiFi.begin() every few seconds does
+  // not recover a wedged ESP32 WiFi driver — which is exactly what happens when
+  // the AP vanishes entirely (router reboot) rather than just weakening. So we
+  // escalate: gentle retry -> full radio reset -> reboot.
+  static uint32_t lastCheck    = 0;
+  static bool     wasConnected = true;
+  static uint32_t downSince    = 0;   // millis when the link dropped (0 = up)
+  static uint8_t  attempts     = 0;
+
   if (millis() - lastCheck > 5000) {
     lastCheck = millis();
     bool up = (WiFi.status() == WL_CONNECTED);
-    if (!up) {
-      if (staSsid.length()) {
-        Serial.printf("[net] WiFi dropped, reconnecting to %s\n", staSsid.c_str());
-        WiFi.begin(staSsid.c_str(), staPsk.c_str());  // reconnect() can't; creds not persisted
-      } else {
-        Serial.println("[net] WiFi dropped, reconnecting");
-        WiFi.reconnect();
+
+    if (up) {
+      if (!wasConnected) {            // link just came back
+        Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
+        startMdns();                  // re-announce so tdai2170.local resolves
       }
-    } else if (!wasConnected) {
-      // Link just came back — re-announce mDNS so tdai2170.local resolves again.
-      Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
-      startMdns();
+      downSince = 0;
+      attempts  = 0;
+    } else if (staSsid.length()) {    // only escalate if we have known-good creds
+      if (downSince == 0) downSince = millis();
+      uint32_t downMs = millis() - downSince;
+      attempts++;
+
+      if (downMs > 300000UL) {                 // Tier 3: >5 min down -> reboot
+        Serial.println("[net] WiFi down >5 min — rebooting");
+        delay(100);
+        ESP.restart();
+      } else if (attempts % 6 == 0) {          // Tier 2: ~every 30 s -> radio reset
+        Serial.println("[net] WiFi still down — full radio reset");
+        WiFi.disconnect(true, false);
+        WiFi.mode(WIFI_OFF);
+        delay(100);
+        WiFi.mode(WIFI_STA);
+        WiFi.setHostname(HA_NODE_ID);
+        WiFi.setAutoReconnect(true);
+        WiFi.begin(staSsid.c_str(), staPsk.c_str());
+      } else {                                 // Tier 1: gentle reconnect
+        Serial.printf("[net] WiFi down %us — reconnecting to %s\n",
+                      (unsigned)(downMs / 1000), staSsid.c_str());
+        WiFi.begin(staSsid.c_str(), staPsk.c_str());
+      }
+    } else {
+      // No stored creds (never connected) — don't reboot-loop; just retry.
+      Serial.println("[net] WiFi down (no stored creds) — reconnecting");
+      WiFi.reconnect();
     }
     wasConnected = up;
   }
