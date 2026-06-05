@@ -89,7 +89,7 @@ async function tick(){
     document.getElementById('status').innerHTML=
       card('WiFi',s.wifi.ssid+' ('+s.wifi.rssi+' dBm)')+
       card('IP',s.wifi.ip)+
-      card('Firmware',s.fw)+
+      card('Device FW',s.fw)+
       card('MQTT',badge(s.mqtt))+
       card('TCP clients',s.tcp_clients)+
       card('Power',s.amp.power)+
@@ -97,7 +97,9 @@ async function tick(){
       card('Volume',s.amp.volume_db+' dB')+
       card('Source',s.amp.source)+
       card('Voicing',s.amp.voicing)+
-      card('RoomPerfect',s.amp.roomperfect);
+      card('RoomPerfect',s.amp.roomperfect)+
+      card('Amp FW',s.amp.version)+
+      card('Amp model',s.amp.device);
     let lines=await (await fetch('/api/log')).json();
     let el=document.getElementById('log');
     let atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-10;
@@ -161,6 +163,8 @@ static void handleState(WebServer* s) {
   a["source"]  = lyngState.srcKnown ? lyngSourceName(lyngState.source) : "?";
   a["voicing"] = lyngState.voiKnown ? lyngVoicingName(lyngState.voicing) : "?";
   a["roomperfect"] = lyngState.rpKnown ? lyngRoomPerfectName(lyngState.rp) : "?";
+  a["version"] = lyngState.version.length() ? lyngState.version : "?";
+  a["device"]  = lyngState.device.length()  ? lyngState.device  : "?";
 
   String out; serializeJson(d, out);
   s->send(200, "application/json", out);
