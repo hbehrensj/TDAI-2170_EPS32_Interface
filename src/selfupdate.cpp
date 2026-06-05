@@ -18,31 +18,35 @@ static uint32_t verNum(const String& v) {
 static String doUpdate() {
   if (WiFi.status() != WL_CONNECTED) return "offline";
 
-  WiFiClientSecure client;
-  client.setInsecure();                 // no cert pinning (GitHub TLS)
-  HTTPClient http;
-  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-  http.setConnectTimeout(8000);
-  if (!http.begin(client, UPDATE_VERSION_URL)) return "manifest begin failed";
+  // --- Fetch + parse the manifest, then FREE its TLS client. A WiFiClientSecure
+  //     holds a large TLS buffer; keeping it alive while the firmware download
+  //     opens a second TLS context exhausts the heap (-> connection refused). ---
+  String remote;
+  {
+    WiFiClientSecure client;
+    client.setInsecure();               // no cert pinning (GitHub TLS)
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    http.setConnectTimeout(8000);
+    if (!http.begin(client, UPDATE_VERSION_URL)) return "manifest begin failed";
 
-  int code = http.GET();
-  if (code != HTTP_CODE_OK) {
+    int code = http.GET();
+    if (code != HTTP_CODE_OK) { http.end(); return String("manifest HTTP ") + code; }
+    String body = http.getString();
     http.end();
-    return String("manifest HTTP ") + code;
-  }
-  String body = http.getString();
-  http.end();
 
-  JsonDocument d;
-  if (deserializeJson(d, body)) return "bad manifest JSON";
-  String remote = d["version"] | "";
+    JsonDocument d;
+    if (deserializeJson(d, body)) return "bad manifest JSON";
+    remote = d["version"] | "";
+  }
   if (remote.isEmpty()) return "no version in manifest";
 
   Serial.printf("[update] local=%s remote=%s\n", FIRMWARE_VERSION_STR, remote.c_str());
   if (verNum(remote) <= verNum(FIRMWARE_VERSION_STR))
     return String("up to date (") + FIRMWARE_VERSION_STR + ")";
 
-  Serial.printf("[update] newer release %s -> downloading firmware\n", remote.c_str());
+  Serial.printf("[update] newer release %s -> downloading firmware (heap=%u)\n",
+                remote.c_str(), ESP.getFreeHeap());
   WiFiClientSecure uclient;
   uclient.setInsecure();
   httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
