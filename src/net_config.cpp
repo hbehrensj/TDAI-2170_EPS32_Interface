@@ -190,7 +190,16 @@ void netConfigLoop() {
 
   if (millis() - lastCheck > 5000) {
     lastCheck = millis();
-    bool up = (WiFi.status() == WL_CONNECTED);
+    // A router reboot often leaves the ESP32 re-associated at L2 (status reports
+    // WL_CONNECTED) but with a failed DHCP renewal, so localIP() stays 0.0.0.0.
+    // In that half-wedged state none of the tiers below ever fire and mDNS has no
+    // address to announce — the device looks "online" forever. Treat "no valid
+    // IP" as down so the escalation (and the >5 min reboot) actually recovers it.
+    bool linkUp = (WiFi.status() == WL_CONNECTED);
+    bool hasIp  = (WiFi.localIP() != IPAddress((uint32_t)0));
+    bool up     = linkUp && hasIp;
+    if (linkUp && !hasIp)
+      Serial.println("[net] associated but no IP (DHCP not renewed) — treating as down");
 
     if (up) {
       if (!wasConnected) {            // link just came back
