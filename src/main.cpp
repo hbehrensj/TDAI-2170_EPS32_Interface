@@ -8,6 +8,7 @@
 #include "ota.h"
 #include "selfupdate.h"
 #include "watchdog.h"
+#include "diag.h"
 
 // ---- Status LED ----------------------------------------------------------
 // Simple non-blocking blink. Pattern conveys the current state.
@@ -62,6 +63,8 @@ void setup() {
   delay(300);
   Serial.printf("\n[TDAI2170] boot  fw=%s\n", FIRMWARE_VERSION_STR);
 
+  diagBegin();        // latch why we last rebooted before anything else runs
+
   statusLedBegin();
   lyngdorfBegin();
 
@@ -93,6 +96,7 @@ void setup() {
 
 void loop() {
   watchdogFeed();
+  diagTick();
   serialConsoleLoop();
   netConfigLoop();
   otaLoop();

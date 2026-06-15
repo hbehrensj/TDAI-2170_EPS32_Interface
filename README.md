@@ -185,7 +185,7 @@ The IP is also printed over USB serial at boot, and the DHCP hostname is `tdai21
 - **TCP `:4001`** — point the official Lyngdorf app here (raw serial bridge).
 - **HTTP `:80` `/mcp`** — MCP JSON-RPC endpoint for AI agents / MCP clients.
 - **MQTT** — Home Assistant auto-discovers Power, Mute, Volume, Source, Voicing
-  and RoomPerfect entities.
+  and RoomPerfect entities, plus a "Last reboot reason" diagnostic sensor.
 
 ## Releases & self-update
 

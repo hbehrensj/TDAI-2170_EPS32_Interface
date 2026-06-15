@@ -2,6 +2,7 @@
 #include "config.h"
 #include "net_config.h"
 #include "lyngdorf.h"
+#include "diag.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -93,6 +94,14 @@ static void publishDiscovery() {
     opts.add(lyngRoomPerfectName(9));                  // Global
     publishConfig("select", "roomperfect", d);
   }
+  {  // Diagnostic: why the device last rebooted
+    JsonDocument d;
+    d["name"] = "Last reboot reason";
+    d["state_topic"] = tState("last_reset");
+    d["icon"] = "mdi:restart-alert";
+    d["entity_category"] = "diagnostic";
+    publishConfig("sensor", "last_reset", d);
+  }
 }
 
 void mqttPublishState() {
@@ -171,6 +180,7 @@ static void reconnect() {
   mqtt.subscribe(tCmd("voicing").c_str());
   mqtt.subscribe(tCmd("roomperfect").c_str());
   publishDiscovery();
+  mqtt.publish(tState("last_reset").c_str(), diagLastResetText().c_str(), true);
   mqttPublishState();
 }
 

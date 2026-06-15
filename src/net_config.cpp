@@ -3,6 +3,7 @@
 #include "mcp_server.h"
 #include "mqtt_ha.h"
 #include "watchdog.h"
+#include "diag.h"
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
@@ -101,6 +102,7 @@ static void runPortal(bool onDemand) {
 
   if (!ok) {
     Serial.println("[net] not connected after portal; rebooting");
+    diagMarkReboot(DIAG_RB_PORTAL);
     delay(1000);
     ESP.restart();
   }
@@ -222,6 +224,7 @@ void netConfigLoop() {
 
       if (downMs > 300000UL) {                 // Tier 3: >5 min down -> reboot
         Serial.println("[net] WiFi down >5 min — rebooting");
+        diagMarkReboot(DIAG_RB_WIFI_DOWN);
         delay(100);
         ESP.restart();
       } else if (attempts % 6 == 0) {          // Tier 2: ~every 30 s -> radio reset

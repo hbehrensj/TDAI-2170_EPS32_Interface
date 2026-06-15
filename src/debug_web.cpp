@@ -5,6 +5,7 @@
 #include "net_config.h"
 #include "selfupdate.h"
 #include "tcp_bridge.h"
+#include "diag.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
@@ -99,7 +100,9 @@ async function tick(){
       card('Voicing',s.amp.voicing)+
       card('RoomPerfect',s.amp.roomperfect)+
       card('Amp FW',s.amp.version)+
-      card('Amp model',s.amp.device);
+      card('Amp model',s.amp.device)+
+      card('Uptime',fmtUp(s.uptime_s))+
+      card('Last reboot',s.last_reset);
     let lines=await (await fetch('/api/log')).json();
     let el=document.getElementById('log');
     let atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-10;
@@ -111,6 +114,8 @@ async function tick(){
   }catch(e){}
 }
 function card(k,v){return '<div class=card><div class=k>'+k+'</div><div class=v>'+v+'</div></div>'}
+function fmtUp(s){var d=s/86400|0,h=s%86400/3600|0,m=s%3600/60|0;
+  return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m'}
 async function loadMqtt(){
   try{
     let m=await (await fetch('/api/mqtt')).json();
@@ -155,6 +160,8 @@ static void handleState(WebServer* s) {
   d["mqtt"]         = mqttConnected();
   d["tcp_clients"]  = tcpBridgeClientCount();
   d["fw"]           = FIRMWARE_VERSION_STR;
+  d["last_reset"]   = diagLastResetText();
+  d["uptime_s"]     = diagUptimeSeconds();
 
   JsonObject a = d["amp"].to<JsonObject>();
   a["power"]   = lyngState.powerKnown ? (lyngState.power ? "on" : "off") : "?";

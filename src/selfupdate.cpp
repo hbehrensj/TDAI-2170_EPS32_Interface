@@ -1,6 +1,7 @@
 #include "selfupdate.h"
 #include "config.h"
 #include "watchdog.h"
+#include "diag.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -56,9 +57,11 @@ static String doUpdate() {
   // The download+flash blocks loop() for far longer than the watchdog window;
   // pause it so a slow link isn't mistaken for a stall. On success update()
   // reboots and never returns; on failure we resume below.
+  diagMarkReboot(DIAG_RB_SELFUPDATE);   // update() reboots on success
   watchdogPause();
   t_httpUpdate_return ret = httpUpdate.update(uclient, UPDATE_FIRMWARE_URL);
   watchdogResume();
+  diagMarkReboot(DIAG_RB_NONE);         // only reached if the update failed
   switch (ret) {
     case HTTP_UPDATE_FAILED:
       return String("update failed: ") + httpUpdate.getLastErrorString();
