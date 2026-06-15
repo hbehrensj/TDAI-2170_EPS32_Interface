@@ -2,6 +2,7 @@
 #include "config.h"
 #include "mcp_server.h"
 #include "mqtt_ha.h"
+#include "watchdog.h"
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
@@ -76,6 +77,10 @@ static void runPortal(bool onDemand) {
 
   wm.setConfigPortalTimeout(onDemand ? 300 : 0);  // on-demand auto-exits after 5 min
 
+  // The portal blocks for minutes waiting on the user; don't let the watchdog
+  // reboot mid-configuration. (No-op before the watchdog is armed in setup().)
+  watchdogPause();
+
   bool ok;
   if (onDemand) {
     Serial.println("[net] starting on-demand config portal");
@@ -91,6 +96,8 @@ static void runPortal(bool onDemand) {
   mqttUser    = pUser.getValue();
   mqttPass    = pPass.getValue();
   saveSettings();
+
+  watchdogResume();
 
   if (!ok) {
     Serial.println("[net] not connected after portal; rebooting");

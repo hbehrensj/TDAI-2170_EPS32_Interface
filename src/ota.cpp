@@ -1,5 +1,6 @@
 #include "ota.h"
 #include "config.h"
+#include "watchdog.h"
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 
@@ -16,6 +17,7 @@ void otaBegin() {
   ArduinoOTA.setPassword(OTA_PASSWORD);
 
   ArduinoOTA.onStart([]() {
+    watchdogPause();      // the flash blocks loop() until done; don't self-reboot
     Serial.println("[ota] update starting");
   });
   ArduinoOTA.onEnd([]() {
@@ -25,6 +27,7 @@ void otaBegin() {
     Serial.printf("[ota] %u%%\r", (t ? p * 100 / t : 0));
   });
   ArduinoOTA.onError([](ota_error_t e) {
+    watchdogResume();     // upload aborted — re-arm the watchdog
     Serial.printf("[ota] error %u\n", e);
   });
 

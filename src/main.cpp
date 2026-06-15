@@ -7,6 +7,7 @@
 #include "mcp_server.h"
 #include "ota.h"
 #include "selfupdate.h"
+#include "watchdog.h"
 
 // ---- Status LED ----------------------------------------------------------
 // Simple non-blocking blink. Pattern conveys the current state.
@@ -84,9 +85,14 @@ void setup() {
   lyngdorfSend("!RP?");
   lyngdorfSend("!VER?");
   lyngdorfSend("!DEVICE?");
+
+  // Arm last, so the blocking bring-up above (WiFi connect, captive portal)
+  // never trips it.
+  watchdogBegin();
 }
 
 void loop() {
+  watchdogFeed();
   serialConsoleLoop();
   netConfigLoop();
   otaLoop();
