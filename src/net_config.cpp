@@ -153,8 +153,29 @@ void netConfigBegin() {
                      "(USB serial console still works for bench debugging)");
 #endif
   } else {
-    runPortal(false);                      // no secrets: captive portal
-    connected = (WiFi.status() == WL_CONNECTED);
+    // Production path. Connect to the network WiFiManager has stored, but NEVER
+    // fall into the config portal on failure: a temporary router/AP outage must
+    // not turn the device into an unsolicited hotspot that needs manual WiFi
+    // reconfiguration. Instead stay offline and let the reconnect watchdog (and
+    // its 5-min reboot) keep retrying until the known network returns. The setup
+    // portal stays reachable on demand by holding the BOOT button.
+    WiFiManager wm;
+    if (wm.getWiFiIsSaved() && wm.getWiFiSSID().length()) {
+      staSsid = wm.getWiFiSSID();           // seed the watchdog up front so it
+      staPsk  = wm.getWiFiPass();           // retries these creds even if this
+                                            // boot's attempt fails
+      Serial.printf("[net] connecting to stored network '%s'\n", staSsid.c_str());
+      WiFi.begin(staSsid.c_str(), staPsk.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
+      connected = (WiFi.status() == WL_CONNECTED);
+      if (!connected)
+        Serial.println("[net] stored network unavailable — staying offline and "
+                       "retrying (hold BOOT for the setup portal)");
+    } else {
+      runPortal(false);                     // genuinely unconfigured: first-time setup
+      connected = (WiFi.status() == WL_CONNECTED);
+    }
   }
 
   if (connected) {
