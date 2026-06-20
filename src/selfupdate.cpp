@@ -15,6 +15,10 @@ static uint32_t verNum(const String& v) {
   return (uint32_t)a * 1000000 + (uint32_t)b * 1000 + (uint32_t)c;
 }
 
+// Set once a manifest fetch actually reaches GitHub, so the boot-time retry can
+// back off to the daily cadence only after a real check has succeeded.
+static bool g_reachedServer = false;
+
 // Fetch the manifest; on a newer version, perform the update (which reboots on
 // success and does not return). Returns a human-readable status string.
 static String doUpdate() {
@@ -42,6 +46,7 @@ static String doUpdate() {
     remote = d["version"] | "";
   }
   if (remote.isEmpty()) return "no version in manifest";
+  g_reachedServer = true;               // we successfully reached GitHub this run
 
   Serial.printf("[update] local=%s remote=%s\n", FIRMWARE_VERSION_STR, remote.c_str());
   if (verNum(remote) <= verNum(FIRMWARE_VERSION_STR))
@@ -80,16 +85,18 @@ String selfUpdateCheckNow() {
 
 void selfUpdateLoop() {
   static uint32_t last = 0;
-  static bool firstDone = false;
   uint32_t now = millis();
 
-  if (!firstDone) {
-    if (now < 30000) return;            // give WiFi/services time to settle
-    firstDone = true;
-    last = now;
-    selfUpdateCheckNow();
-  } else if (now - last >= UPDATE_CHECK_INTERVAL_MS) {
-    last = now;
-    selfUpdateCheckNow();
-  }
+  if (now < 30000) return;              // give WiFi/services time to settle
+
+  // Until the first successful check, retry every couple of minutes rather than
+  // burning the single boot-time check while WiFi is still down (a reboot is
+  // often triggered *by* a network outage, so the link isn't up at 30 s — the
+  // old one-shot check then stranded the device on the old version for ~24 h).
+  uint32_t interval = g_reachedServer ? UPDATE_CHECK_INTERVAL_MS : 120000UL;
+  if (last != 0 && (now - last) < interval) return;
+  if (WiFi.status() != WL_CONNECTED) return;   // skip while offline; don't arm the timer
+
+  last = now;
+  selfUpdateCheckNow();
 }
