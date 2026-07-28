@@ -213,22 +213,23 @@ void netConfigLoop() {
   // not recover a wedged ESP32 WiFi driver — which is exactly what happens when
   // the AP vanishes entirely (router reboot) rather than just weakening. So we
   // escalate: gentle retry -> full radio reset -> reboot.
-  static uint32_t lastCheck    = 0;
-  static bool     wasConnected = true;
-  static uint32_t downSince    = 0;   // millis when the link dropped (0 = up)
-  static uint8_t  attempts     = 0;
-  static uint8_t  upStreak     = 0;   // consecutive confirmed-up polls since the last drop
-  static int      lastKnownRssi = 0;  // RSSI as of the most recent up poll (drop forensics)
+  static uint32_t lastCheck     = 0;
+  static bool     wasConnected  = true;
+  static uint32_t downSince     = 0;   // millis when the link dropped (0 = up)
+  static uint8_t  attempts      = 0;
+  static int      lastKnownRssi = 0;   // RSSI as of the most recent up poll (drop forensics)
 
-  // Some APs (e.g. AiMesh "Roaming Assistant") deauth a client outright once its
-  // RSSI dips below a threshold, expecting it to roam — which the ESP32 can't do
-  // intelligently, so it just reconnects to the same AP and can get kicked again
-  // moments later. A single successful poll during that flapping isn't a real
-  // recovery, so require a short run of consecutive up polls before trusting it
-  // and resetting the escalation clock; otherwise every blip would mask the
-  // outage and Tier 2/3 would never fire even though the device stays unreachable.
-  static const uint8_t UP_CONFIRM_TICKS = 3;   // ~15 s of stable connection
-
+  // v1.5.7 tried debouncing "up" behind several consecutive polls before
+  // trusting a reconnect, to stop a flapping AP-side deauth (e.g. AiMesh
+  // "Roaming Assistant") from perpetually resetting this clock. In the field
+  // that backfired badly: while flapping, attempts/downSince no longer reset
+  // on the brief successes that *do* happen, so Tier 2 (a full radio
+  // off/on cycle) started firing roughly every 30s of not-fully-stable time
+  // instead of only after sustained downtime — and each reset is itself
+  // disruptive (brief total unreachability while it re-associates), so it
+  // compounded a marginal link into a much worse one. Reverted to resetting
+  // on every single successful poll, same as before v1.5.7: don't make a
+  // shaky connection worse by hitting it with a disruptive "fix" every 30s.
   if (millis() - lastCheck > 5000) {
     lastCheck = millis();
     // A router reboot often leaves the ESP32 re-associated at L2 (status reports
@@ -244,19 +245,15 @@ void netConfigLoop() {
 
     if (up) {
       lastKnownRssi = WiFi.RSSI();   // last-seen-good RSSI, for forensics if it drops next
-      if (upStreak < UP_CONFIRM_TICKS) upStreak++;
-      if (upStreak >= UP_CONFIRM_TICKS) {
-        if (!wasConnected) {          // confirmed recovery, not just a blip
-          Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
-          startMdns();                // re-announce so tdai2170.local resolves
-          diagMarkWifiUp(millis() - downSince);
-        }
-        downSince    = 0;
-        attempts     = 0;
-        wasConnected = true;
+      if (!wasConnected) {            // link just came back
+        Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
+        startMdns();                  // re-announce so tdai2170.local resolves
+        diagMarkWifiUp(millis() - downSince);
       }
+      downSince    = 0;
+      attempts     = 0;
+      wasConnected = true;
     } else if (staSsid.length()) {    // only escalate if we have known-good creds
-      upStreak     = 0;
       wasConnected = false;
       if (downSince == 0) {
         downSince = millis();
@@ -286,7 +283,6 @@ void netConfigLoop() {
       }
     } else {
       // No stored creds (never connected) — don't reboot-loop; just retry.
-      upStreak     = 0;
       wasConnected = false;
       Serial.println("[net] WiFi down (no stored creds) — reconnecting");
       WiFi.reconnect();
