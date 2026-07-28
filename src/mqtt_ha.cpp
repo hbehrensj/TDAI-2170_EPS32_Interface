@@ -102,6 +102,14 @@ static void publishDiscovery() {
     d["entity_category"] = "diagnostic";
     publishConfig("sensor", "last_reset", d);
   }
+  {  // Diagnostic: most recent WiFi drop (no reboot involved, e.g. AP-side deauth)
+    JsonDocument d;
+    d["name"] = "Last WiFi drop";
+    d["state_topic"] = tState("last_wifi_drop");
+    d["icon"] = "mdi:wifi-alert";
+    d["entity_category"] = "diagnostic";
+    publishConfig("sensor", "last_wifi_drop", d);
+  }
 }
 
 void mqttPublishState() {
@@ -181,6 +189,7 @@ static void reconnect() {
   mqtt.subscribe(tCmd("roomperfect").c_str());
   publishDiscovery();
   mqtt.publish(tState("last_reset").c_str(), diagLastResetText().c_str(), true);
+  mqtt.publish(tState("last_wifi_drop").c_str(), diagLastWifiDropText().c_str(), true);
   mqttPublishState();
 }
 

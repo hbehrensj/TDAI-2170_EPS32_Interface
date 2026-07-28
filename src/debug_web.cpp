@@ -102,7 +102,8 @@ async function tick(){
       card('Amp FW',s.amp.version)+
       card('Amp model',s.amp.device)+
       card('Uptime',fmtUp(s.uptime_s))+
-      card('Last reboot',s.last_reset);
+      card('Last reboot',s.last_reset)+
+      card('Last WiFi drop',s.last_wifi_drop);
     let lines=await (await fetch('/api/log')).json();
     let el=document.getElementById('log');
     let atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-10;
@@ -161,6 +162,7 @@ static void handleState(WebServer* s) {
   d["tcp_clients"]  = tcpBridgeClientCount();
   d["fw"]           = FIRMWARE_VERSION_STR;
   d["last_reset"]   = diagLastResetText();
+  d["last_wifi_drop"] = diagLastWifiDropText();
   d["uptime_s"]     = diagUptimeSeconds();
 
   JsonObject a = d["amp"].to<JsonObject>();

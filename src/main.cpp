@@ -98,12 +98,12 @@ void loop() {
   watchdogFeed();
   diagTick();
   serialConsoleLoop();
-  netConfigLoop();
-  otaLoop();
-  selfUpdateLoop();
-  lyngdorfLoop();
-  tcpBridgeLoop();
-  mqttLoop();
-  mcpLoop();
-  statusLedLoop();
+  diagSetPhase(PH_NET);       netConfigLoop();
+  diagSetPhase(PH_OTA);       otaLoop();
+  diagSetPhase(PH_UPDATE);    selfUpdateLoop();
+  diagSetPhase(PH_LYNGDORF);  lyngdorfLoop();
+  diagSetPhase(PH_TCP);       tcpBridgeLoop();
+  diagSetPhase(PH_MQTT);      mqttLoop();
+  diagSetPhase(PH_MCP);       mcpLoop();
+  diagSetPhase(PH_NONE);      statusLedLoop();
 }

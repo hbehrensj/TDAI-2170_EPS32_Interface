@@ -217,6 +217,17 @@ void netConfigLoop() {
   static bool     wasConnected = true;
   static uint32_t downSince    = 0;   // millis when the link dropped (0 = up)
   static uint8_t  attempts     = 0;
+  static uint8_t  upStreak     = 0;   // consecutive confirmed-up polls since the last drop
+  static int      lastKnownRssi = 0;  // RSSI as of the most recent up poll (drop forensics)
+
+  // Some APs (e.g. AiMesh "Roaming Assistant") deauth a client outright once its
+  // RSSI dips below a threshold, expecting it to roam — which the ESP32 can't do
+  // intelligently, so it just reconnects to the same AP and can get kicked again
+  // moments later. A single successful poll during that flapping isn't a real
+  // recovery, so require a short run of consecutive up polls before trusting it
+  // and resetting the escalation clock; otherwise every blip would mask the
+  // outage and Tier 2/3 would never fire even though the device stays unreachable.
+  static const uint8_t UP_CONFIRM_TICKS = 3;   // ~15 s of stable connection
 
   if (millis() - lastCheck > 5000) {
     lastCheck = millis();
@@ -232,14 +243,25 @@ void netConfigLoop() {
       Serial.println("[net] associated but no IP (DHCP not renewed) — treating as down");
 
     if (up) {
-      if (!wasConnected) {            // link just came back
-        Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
-        startMdns();                  // re-announce so tdai2170.local resolves
+      lastKnownRssi = WiFi.RSSI();   // last-seen-good RSSI, for forensics if it drops next
+      if (upStreak < UP_CONFIRM_TICKS) upStreak++;
+      if (upStreak >= UP_CONFIRM_TICKS) {
+        if (!wasConnected) {          // confirmed recovery, not just a blip
+          Serial.printf("[net] reconnected  IP=%s\n", WiFi.localIP().toString().c_str());
+          startMdns();                // re-announce so tdai2170.local resolves
+          diagMarkWifiUp(millis() - downSince);
+        }
+        downSince    = 0;
+        attempts     = 0;
+        wasConnected = true;
       }
-      downSince = 0;
-      attempts  = 0;
     } else if (staSsid.length()) {    // only escalate if we have known-good creds
-      if (downSince == 0) downSince = millis();
+      upStreak     = 0;
+      wasConnected = false;
+      if (downSince == 0) {
+        downSince = millis();
+        diagMarkWifiDown(lastKnownRssi);   // RSSI just before it dropped
+      }
       uint32_t downMs = millis() - downSince;
       attempts++;
 
@@ -264,9 +286,10 @@ void netConfigLoop() {
       }
     } else {
       // No stored creds (never connected) — don't reboot-loop; just retry.
+      upStreak     = 0;
+      wasConnected = false;
       Serial.println("[net] WiFi down (no stored creds) — reconnecting");
       WiFi.reconnect();
     }
-    wasConnected = up;
   }
 }

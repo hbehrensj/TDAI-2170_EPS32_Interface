@@ -8,8 +8,15 @@ static const uint32_t DIAG_MAGIC = 0xD1A6C0DE;
 RTC_NOINIT_ATTR static uint32_t rtcMagic;
 RTC_NOINIT_ATTR static uint32_t rtcCause;     // DiagReboot set before a restart
 RTC_NOINIT_ATTR static uint32_t rtcUptimeMs;  // mirrored uptime (forensics)
+RTC_NOINIT_ATTR static uint32_t rtcStallPhase;// LoopPhase active when loop stalled
 
+static volatile uint8_t curPhase = PH_NONE;   // current loop() step (RAM)
 static String lastResetText;
+
+static int      lastDropRssi  = 0;
+static uint32_t lastDownMs    = 0;
+static uint32_t dropCount     = 0;
+static bool     haveDropData  = false;
 
 static const char* resetReasonStr(esp_reset_reason_t r) {
   switch (r) {
@@ -26,13 +33,30 @@ static const char* resetReasonStr(esp_reset_reason_t r) {
   }
 }
 
-static const char* causeStr(uint32_t c) {
+static const char* phaseStr(uint32_t p) {
+  switch (p) {
+    case PH_NET:      return "wifi/reconnect";
+    case PH_OTA:      return "ota";
+    case PH_UPDATE:   return "self-update";
+    case PH_LYNGDORF: return "uart";
+    case PH_TCP:      return "tcp bridge";
+    case PH_MQTT:     return "mqtt";
+    case PH_MCP:      return "web/mcp";
+    default:          return nullptr;
+  }
+}
+
+static String causeStr(uint32_t c, uint32_t phase) {
   switch (c) {
-    case DIAG_RB_LOOP_WDT:   return "loop watchdog (stalled loop)";
+    case DIAG_RB_LOOP_WDT: {
+      const char* ph = phaseStr(phase);
+      return ph ? String("loop watchdog (stalled in: ") + ph + ")"
+                : String("loop watchdog (stalled loop)");
+    }
     case DIAG_RB_WIFI_DOWN:  return "WiFi down >5 min";
     case DIAG_RB_SELFUPDATE: return "self-update";
     case DIAG_RB_PORTAL:     return "config portal";
-    default:                 return nullptr;
+    default:                 return String();
   }
 }
 
@@ -51,8 +75,8 @@ void diagBegin() {
   String s = resetReasonStr(rr);
 
   if (valid) {
-    const char* c = causeStr(rtcCause);
-    if (c) s += String(" — ") + c;
+    String c = causeStr(rtcCause, rtcStallPhase);
+    if (c.length()) s += String(" — ") + c;
     if (rtcUptimeMs) s += " — ran " + fmtDuration(rtcUptimeMs) + " before reboot";
   }
   lastResetText = s;
@@ -60,12 +84,30 @@ void diagBegin() {
 
   // Re-arm for next boot: mark RTC valid and clear the intentional-cause slot so
   // an *unexpected* reset next time shows up as just its hardware reason.
-  rtcMagic    = DIAG_MAGIC;
-  rtcCause    = DIAG_RB_NONE;
-  rtcUptimeMs = 0;
+  rtcMagic      = DIAG_MAGIC;
+  rtcCause      = DIAG_RB_NONE;
+  rtcUptimeMs   = 0;
+  rtcStallPhase = PH_NONE;
 }
 
 void diagMarkReboot(DiagReboot cause) { rtcCause = cause; }
+void diagMarkLoopStall() { rtcCause = DIAG_RB_LOOP_WDT; rtcStallPhase = curPhase; }
+void diagSetPhase(LoopPhase p) { curPhase = (uint8_t)p; }
 void diagTick() { rtcUptimeMs = millis(); }
 String diagLastResetText() { return lastResetText; }
 uint32_t diagUptimeSeconds() { return millis() / 1000; }
+
+void diagMarkWifiDown(int rssiAtDrop) {
+  lastDropRssi = rssiAtDrop;
+  dropCount++;
+  haveDropData = true;
+}
+
+void diagMarkWifiUp(uint32_t downMs) { lastDownMs = downMs; }
+
+String diagLastWifiDropText() {
+  if (!haveDropData) return "none yet";
+  return "RSSI " + String(lastDropRssi) + "dBm before drop — down " +
+         fmtDuration(lastDownMs) + " (" + String(dropCount) +
+         (dropCount == 1 ? " drop" : " drops") + " since boot)";
+}

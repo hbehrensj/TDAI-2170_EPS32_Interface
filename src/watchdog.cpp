@@ -22,7 +22,7 @@ static void onTick(void*) {
     Serial.printf("\n[wdt] loop() stalled >%us — rebooting\n",
                   (unsigned)(WD_TIMEOUT_MS / 1000));
     Serial.flush();
-    diagMarkReboot(DIAG_RB_LOOP_WDT);
+    diagMarkLoopStall();   // records the loop phase that was stuck
     esp_restart();
   }
 }

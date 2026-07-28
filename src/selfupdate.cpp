@@ -34,6 +34,7 @@ static String doUpdate() {
     HTTPClient http;
     http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     http.setConnectTimeout(8000);
+    http.setTimeout(8000);   // bound the read too: this runs in loop() unpaused
     if (!http.begin(client, UPDATE_VERSION_URL)) return "manifest begin failed";
 
     int code = http.GET();
