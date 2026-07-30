@@ -203,6 +203,12 @@ void mqttApplyConfig() {
 
 void mqttBegin() {
   lyngdorfSetStateCallback(mqttPublishState);
+  // Bound how long a connect/read can block: this runs in loop() unpaused,
+  // and a degraded link (retries/partial reads) can otherwise stack up close
+  // to the loop watchdog's 60s window. Tighter than PubSubClient's 15s
+  // default CONNACK wait.
+  net.setTimeout(5);
+  mqtt.setSocketTimeout(5);
   if (netMqttHost().isEmpty())
     Serial.println("[mqtt] no broker configured (set it in the portal)");
 }
