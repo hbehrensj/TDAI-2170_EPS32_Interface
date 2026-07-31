@@ -8,6 +8,8 @@
 #include <WiFiManager.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+#include "ping/ping_sock.h"
+#include <freertos/semphr.h>
 
 // Optional local WiFi credentials for direct bring-up (gitignored).
 #if defined(__has_include)
@@ -106,6 +108,44 @@ static void runPortal(bool onDemand) {
     delay(1000);
     ESP.restart();
   }
+}
+
+// Actively probe whether the network is *actually* reachable, not just
+// whether the radio thinks it's associated. WiFi.status()==WL_CONNECTED plus
+// a valid IP only means the STA associated and got a DHCP lease at some
+// point — it says nothing about whether the AP-side entry is still alive.
+// Seen in the field: the device sits fully "connected" by that definition,
+// completely unreachable from the rest of the network, for hours, with none
+// of the escalation tiers below ever firing because they never see "down".
+//
+// Ping the DHCP-assigned gateway rather than any particular service (e.g.
+// the MQTT broker): a service can have its own downtime independent of
+// whether this device's WiFi is actually fine, which would falsely blame
+// WiFi for an outage on the other end. The gateway is the right thing to
+// trust for "is my network connectivity working".
+static bool gatewayReachable() {
+  IPAddress gw = WiFi.gatewayIP();
+  if (gw == IPAddress((uint32_t)0)) return true;   // no gateway known yet
+
+  static SemaphoreHandle_t pingDone = xSemaphoreCreateBinary();
+  static volatile bool     gotReply;
+  gotReply = false;
+
+  esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
+  cfg.target_addr = IPADDR4_INIT_BYTES(gw[0], gw[1], gw[2], gw[3]);
+  cfg.count       = 1;
+  cfg.timeout_ms  = 2000;
+
+  esp_ping_callbacks_t cbs = {};
+  cbs.on_ping_success = [](esp_ping_handle_t, void*) { gotReply = true; };
+  cbs.on_ping_end     = [](esp_ping_handle_t, void*) { xSemaphoreGive(pingDone); };
+
+  esp_ping_handle_t hdl;
+  if (esp_ping_new_session(&cfg, &cbs, &hdl) != ESP_OK) return true;  // local error; don't false-flag
+  esp_ping_start(hdl);
+  xSemaphoreTake(pingDone, pdMS_TO_TICKS(3000));   // session itself finishes within ~timeout_ms
+  esp_ping_delete_session(hdl);
+  return gotReply;
 }
 
 // (Re)start the mDNS responder on the current STA interface. Safe to call
@@ -213,11 +253,19 @@ void netConfigLoop() {
   // not recover a wedged ESP32 WiFi driver — which is exactly what happens when
   // the AP vanishes entirely (router reboot) rather than just weakening. So we
   // escalate: gentle retry -> full radio reset -> reboot.
-  static uint32_t lastCheck     = 0;
-  static bool     wasConnected  = true;
-  static uint32_t downSince     = 0;   // millis when the link dropped (0 = up)
-  static uint8_t  attempts      = 0;
-  static int      lastKnownRssi = 0;   // RSSI as of the most recent up poll (drop forensics)
+  static uint32_t lastCheck       = 0;
+  static bool     wasConnected    = true;
+  static uint32_t downSince       = 0;   // millis when the link dropped (0 = up)
+  static uint8_t  attempts        = 0;
+  static int      lastKnownRssi   = 0;   // RSSI as of the most recent up poll (drop forensics)
+  static uint32_t lastReachCheck  = 0;
+  static uint8_t  reachFails      = 0;   // consecutive failed reachability probes
+
+  // A couple of consecutive failed pings (~60-90s of confirmed
+  // unreachability, since each probe itself can take up to 3s and they're
+  // spaced 30s apart) before treating WiFi.status() as a lie — one dropped
+  // ping alone could just be a transient blip.
+  static const uint8_t REACH_FAILS_THRESHOLD = 2;
 
   // v1.5.7 tried debouncing "up" behind several consecutive polls before
   // trusting a reconnect, to stop a flapping AP-side deauth (e.g. AiMesh
@@ -239,9 +287,26 @@ void netConfigLoop() {
     // IP" as down so the escalation (and the >5 min reboot) actually recovers it.
     bool linkUp = (WiFi.status() == WL_CONNECTED);
     bool hasIp  = (WiFi.localIP() != IPAddress((uint32_t)0));
-    bool up     = linkUp && hasIp;
     if (linkUp && !hasIp)
       Serial.println("[net] associated but no IP (DHCP not renewed) — treating as down");
+
+    // Only spend a probe while the radio otherwise looks healthy — if it's
+    // already down by the cheap checks there's no need to also wait out a
+    // TCP connect timeout.
+    if (linkUp && hasIp && millis() - lastReachCheck > 30000) {
+      lastReachCheck = millis();
+      if (gatewayReachable()) {
+        reachFails = 0;
+      } else {
+        reachFails++;
+        Serial.printf("[net] gateway ping failed (%u/%u) despite WiFi status looking connected\n",
+                      (unsigned)reachFails, (unsigned)REACH_FAILS_THRESHOLD);
+      }
+    }
+    bool zombie = (reachFails >= REACH_FAILS_THRESHOLD);
+    bool up     = linkUp && hasIp && !zombie;
+    if (zombie && linkUp && hasIp)
+      Serial.println("[net] WiFi status says connected but gateway is unpingable — treating as down");
 
     if (up) {
       lastKnownRssi = WiFi.RSSI();   // last-seen-good RSSI, for forensics if it drops next
