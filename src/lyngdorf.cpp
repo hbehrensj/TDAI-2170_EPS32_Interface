@@ -62,6 +62,91 @@ int lyngVoicingIndexByName(const String& name) {
 }
 float lyngVolumeDb() { return lyngState.volume / 10.0f; }
 
+// !AUDIOSTATUS(bitDepthCode, sampleRateCode, levelDb) is not in Lyngdorf's
+// published External Control Manual — originally reverse-engineered 2026-08
+// by playing known-format tracks and watching the raw values settle after
+// each source change (confirmed independent of physical input, seen
+// identically over USB and HDMI, and of each other: bit depth and sample
+// rate vary independently). Whatever arrives at the amp's own DSP chain is
+// what's reported — a lossy source (e.g. web radio) reports whatever PCM
+// rate/depth it was decoded to upstream, not its original compressed
+// bitrate.
+//
+// Cross-checked 2026-08-14 against the official "My Lyngdorf" Android app
+// (dk.slaudio.lyngdorf, decompiled for interoperability) — its kw3/hw3
+// enums and the rb4.t/rb4.u dispatch in its status handler use the exact
+// same two codes from the same 3-value comma split, confirming and
+// extending the by-ear results below EXCEPT for DSD: the app's table (a
+// generic one shared across Lyngdorf/Steinway's whole product line — TDAI,
+// MP-4x/5x/6x, CD-2) says bitDepthCode 6-10 is DSD and leaves sampleRateCode
+// unmapped for it. On this actual TDAI-2170, confirmed live 2026-08-14 by
+// switching Volumio to "DSD Direct" (native, not DoP) and watching both the
+// official app (which showed "DSD 2.82 MHz 1 bit" — 2.8224 MHz = DSD64) and
+// this device's own /api/state simultaneously: it's bitDepthCode 3 +
+// sampleRateCode 16, matching the original by-ear result, not the app's
+// generic table. Every other code below (2, 4, 7, 9, 13, 15) was confirmed
+// by both methods agreeing, so this unit's firmware apparently doesn't use
+// the app's full generic range at all — it was never worth trusting over a
+// direct, controlled test on the actual hardware in the first place.
+//
+// sampleRateCode 17 was found the same session by switching Volumio to
+// DSD256 (11.28 MHz, confirmed via the file's own DSD-rate tag): paired
+// with bitDepthCode 1 ("PCM") rather than 3, suggesting the amp's own DSD
+// detection stops cleanly identifying bit depth above DSD64. A follow-up
+// test playing a confirmed DSD128 (5.64 MHz) file produced the identical
+// pair (bitDepthCode 1, sampleRateCode 17) — so 17 isn't a per-tier code,
+// it's a single bucket that doesn't distinguish 128x from 256x. A DSD512
+// test (audibly stuttering — the amp can't actually keep up with it) also
+// read back as this same pair. Labeled "DSD128" rather than something more
+// hedged because the TDAI-2170's Streaming USB Input Module is officially
+// spec'd for "<=DSD128" — that's the rate this code is actually meant to
+// represent; 256x/512x reaching the same code is the amp being fed
+// something already out of spec, not a second valid tier.
+static const char* audioSampleRateName(int code) {
+  switch (code) {
+    case 4:  return "22.05 kHz";
+    case 5:  return "32 kHz";
+    case 7:  return "44.1 kHz";
+    case 9:  return "48 kHz";
+    case 12: return "88.2 kHz";
+    case 13: return "96 kHz";
+    case 14: return "176.4 kHz";
+    case 15: return "192 kHz";
+    case 16: return "DSD64";
+    case 17: return "DSD128";  // amp's official DSD ceiling; also seen for out-of-spec 256x/512x, see comment above
+    default: return nullptr;
+  }
+}
+static const char* audioBitDepthName(int code) {
+  switch (code) {
+    case 1:  return "PCM";
+    case 2:  return "16-bit";
+    case 3:  return "DSD";
+    case 4:  return "24-bit";
+    case 5:  return "32-bit";
+    case 6: case 7: case 8: case 9: case 10: return "DSD";
+    case 19: return "PCM ADC";
+    default: return nullptr;
+  }
+}
+String lyngAudioSampleRateName(int code) {
+  const char* n = audioSampleRateName(code);
+  return n ? String(n) : "Unknown (" + String(code) + ")";
+}
+String lyngAudioBitDepthName(int code) {
+  const char* n = audioBitDepthName(code);
+  return n ? String(n) : "Unknown (" + String(code) + ")";
+}
+String lyngAudioFormatText(int bitDepthCode, int sampleRateCode) {
+  // sampleRateCode 16/17 (DSD64/DSD128) is a complete, self-describing label
+  // on its own — bitDepthCode is just the amp's generic "PCM" fallback in
+  // that case, not real information, so pairing them ("PCM / DSD128") reads
+  // as a contradiction rather than a format description.
+  if (sampleRateCode == 16 || sampleRateCode == 17)
+    return lyngAudioSampleRateName(sampleRateCode);
+  return lyngAudioBitDepthName(bitDepthCode) + " / " + lyngAudioSampleRateName(sampleRateCode);
+}
+
 // RoomPerfect: 0=Bypass, 1-8=Focus N, 9=Global.
 String lyngRoomPerfectName(int n) {
   if (n == 0) return "Bypass";
@@ -152,6 +237,23 @@ static void parseLine(String s) {
     lyngState.version = val;
   } else if (key == "DEVICE") {
     lyngState.device = val;
+  } else if (key == "AUDIOSTATUS") {
+    int c1 = val.indexOf(',');
+    int c2 = val.indexOf(',', c1 + 1);
+    if (c1 > 0 && c2 > c1) {
+      int bitDepthCode   = val.substring(0, c1).toInt();
+      int sampleRateCode = val.substring(c1 + 1, c2).toInt();
+      int levelDb        = val.substring(c2 + 1).toInt();
+      // Only a format change (not the level, which updates many times/sec)
+      // counts as "changed" — the level is polled via /api/state, not pushed.
+      changed = !lyngState.audioKnown ||
+                lyngState.audioBitDepthCode   != bitDepthCode ||
+                lyngState.audioSampleRateCode != sampleRateCode;
+      lyngState.audioBitDepthCode   = bitDepthCode;
+      lyngState.audioSampleRateCode = sampleRateCode;
+      lyngState.audioLevelDb        = levelDb;
+      lyngState.audioKnown          = true;
+    }
   }
 
   if (changed && stateCb) stateCb();

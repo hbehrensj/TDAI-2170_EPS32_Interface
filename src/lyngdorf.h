@@ -13,6 +13,16 @@ struct LyngdorfState {
   bool rpKnown    = false;  int  rp = -1;      // RoomPerfect: 0=Bypass,1-8=Focus,9=Global
   String version;                              // !VER reply
   String device;                              // !DEVICE reply
+
+  // !AUDIOSTATUS(bitDepthCode, sampleRateCode, levelDb) — undocumented async
+  // status (not in the official manual); see lyngAudioSampleRateName/
+  // lyngAudioBitDepthName. levelDb is 0.1 dB units, -999 = silence, updates
+  // many times/sec so it deliberately does NOT trigger the state-changed
+  // callback on its own (only a bit-depth/sample-rate change does).
+  bool audioKnown = false;
+  int  audioBitDepthCode   = -1;
+  int  audioSampleRateCode = -1;
+  int  audioLevelDb        = -999;
 };
 
 extern LyngdorfState lyngState;
@@ -45,6 +55,19 @@ float lyngVolumeDb();                             // volume in dB
 String lyngRoomPerfectName(int n);                // "" if out of range
 int    lyngRoomPerfectIndexByName(const String& name);  // -1 if not found
 String lyngRoomPerfectCommand(int n);             // serial command for position n
+
+// AUDIOSTATUS format codes, reverse-engineered by observation and
+// cross-checked against the official Android app (undocumented by Lyngdorf)
+// — see the comment above audioSampleRateName() in lyngdorf.cpp for the
+// known mappings and how they were derived. Returns "Unknown (n)" for any
+// code not yet seen.
+String lyngAudioSampleRateName(int code);
+String lyngAudioBitDepthName(int code);
+
+// Combines both into the text shown to users, collapsing the redundant/
+// misleading "PCM / DSD128"-style pairing down to just the DSD label —
+// see the comment above this function's definition in lyngdorf.cpp.
+String lyngAudioFormatText(int bitDepthCode, int sampleRateCode);
 
 // Recent protocol traffic (ring buffer) for the debug web UI.
 int    lyngLogSize();          // number of retained lines

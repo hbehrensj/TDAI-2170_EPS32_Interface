@@ -33,7 +33,9 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
   button.sec{background:#374151}
   input{background:#0a0c10;border:1px solid #262b35;color:#e6e6e6;border-radius:6px;
         padding:8px;width:60%;font-family:ui-monospace,monospace}
+  input[type=range]{width:100%;padding:0}
   h3{margin:18px 0 8px}
+  button.active{background:#16a34a}
 </style></head><body>
 <header>Lyngdorf TDAI-2170 &mdash; debug</header>
 <div class="wrap">
@@ -56,6 +58,14 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
     <input id="raw" placeholder="!VOL(-200)" onkeydown="if(event.key=='Enter')sendRaw()">
     <button onclick="sendRaw()">Send</button>
   </div>
+  <h3>Volume</h3>
+  <div class="card">
+    <input type="range" id="volslider" min="-60" max="12" step="0.5"
+           oninput="volLabel()" onchange="volSet()">
+    <div class="k" id="vollabel" style="margin-top:6px"></div>
+  </div>
+  <h3>Sources</h3>
+  <div class="grid" id="sources"></div>
   <h3>UART log</h3>
   <div id="log"></div>
 
@@ -84,6 +94,20 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
 function cmd(c){fetch('/api/cmd?c='+encodeURIComponent(c))}
 function sendRaw(){var e=document.getElementById('raw');if(e.value){cmd(e.value);e.value=''}}
 function badge(b){return b?'<span class=ok>yes</span>':'<span class=bad>no</span>'}
+
+// Appendix A source order (see SOURCE_NAMES in lyngdorf.cpp) — index is the !SRC(n) value.
+const SOURCES=["Coax Digital 1","Coax Digital 2","Optical Digital 3","Optical Digital 4",
+  "Optical Digital 5","Optical Digital 6","USB Input","HDMI Input 1","HDMI Input 2",
+  "HDMI Input 3","HDMI Input 4","HDMI ARC","Analog 1","Analog 2","Analog 3","Analog 4",
+  "Analog 5","Analog 6 (XLR)"];
+function srcCmd(i){cmd('!SRC('+i+')')}
+function initSources(){
+  document.getElementById('sources').innerHTML=SOURCES.map((n,i)=>
+    '<button class="sec" id="src'+i+'" onclick="srcCmd('+i+')">'+n+'</button>').join('');
+}
+let volslider,vollabel,volDragging=false;
+function volLabel(){vollabel.textContent=parseFloat(volslider.value).toFixed(1)+' dB'}
+function volSet(){cmd('!VOL('+Math.round(parseFloat(volslider.value)*10)+')')}
 async function tick(){
   try{
     let s=await (await fetch('/api/state')).json();
@@ -101,9 +125,16 @@ async function tick(){
       card('RoomPerfect',s.amp.roomperfect)+
       card('Amp FW',s.amp.version)+
       card('Amp model',s.amp.device)+
+      card('Audio format',s.amp.audio_format)+
+      card('Audio level',s.amp.audio_level_db)+
       card('Uptime',fmtUp(s.uptime_s))+
       card('Last reboot',s.last_reset)+
       card('Last WiFi drop',s.last_wifi_drop);
+    if(!volDragging && s.amp.volume_db!=='?'){volslider.value=s.amp.volume_db;volLabel()}
+    for(let i=0;i<SOURCES.length;i++){
+      let b=document.getElementById('src'+i);
+      if(b)b.classList.toggle('active',s.amp.source===SOURCES[i]);
+    }
     let lines=await (await fetch('/api/log')).json();
     let el=document.getElementById('log');
     let atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-10;
@@ -143,6 +174,10 @@ async function checkUpdate(){
     el.textContent=await r.text();
   }catch(e){el.textContent='(rebooting if updating…)';}
 }
+volslider=document.getElementById('volslider');vollabel=document.getElementById('vollabel');
+volslider.addEventListener('pointerdown',()=>volDragging=true);
+volslider.addEventListener('pointerup',()=>volDragging=false);
+initSources();
 setInterval(tick,1000);tick();loadMqtt();
 </script></body></html>)HTML";
 
@@ -174,6 +209,12 @@ static void handleState(WebServer* s) {
   a["roomperfect"] = lyngState.rpKnown ? lyngRoomPerfectName(lyngState.rp) : "?";
   a["version"] = lyngState.version.length() ? lyngState.version : "?";
   a["device"]  = lyngState.device.length()  ? lyngState.device  : "?";
+  a["audio_format"] = lyngState.audioKnown
+      ? lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode)
+      : "?";
+  a["audio_level_db"] = lyngState.audioKnown
+      ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
+      : "?";
 
   String out; serializeJson(d, out);
   s->send(200, "application/json", out);

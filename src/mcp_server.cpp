@@ -23,6 +23,12 @@ static String toolGetState() {
   d["roomperfect"] = lyngState.rpKnown ? lyngRoomPerfectName(lyngState.rp) : "unknown";
   if (lyngState.version.length()) d["version"] = lyngState.version;
   if (lyngState.device.length())  d["device"]  = lyngState.device;
+  d["audio_format"] = lyngState.audioKnown
+      ? lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode)
+      : "unknown";
+  d["audio_level_db"] = lyngState.audioKnown
+      ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
+      : "unknown";
   String out; serializeJson(d, out); return out;
 }
 

@@ -94,6 +94,14 @@ static void publishDiscovery() {
     opts.add(lyngRoomPerfectName(9));                  // Global
     publishConfig("select", "roomperfect", d);
   }
+  {  // Diagnostic: current audio format (bit depth / sample rate)
+    JsonDocument d;
+    d["name"] = "Audio format";
+    d["state_topic"] = tState("audio_format");
+    d["icon"] = "mdi:waveform";
+    d["entity_category"] = "diagnostic";
+    publishConfig("sensor", "audio_format", d);
+  }
   {  // Diagnostic: why the device last rebooted
     JsonDocument d;
     d["name"] = "Last reboot reason";
@@ -129,6 +137,10 @@ void mqttPublishState() {
   if (lyngState.rpKnown)
     mqtt.publish(tState("roomperfect").c_str(),
                  lyngRoomPerfectName(lyngState.rp).c_str(), true);
+  if (lyngState.audioKnown) {
+    String fmt = lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode);
+    mqtt.publish(tState("audio_format").c_str(), fmt.c_str(), true);
+  }
 }
 
 static void onMessage(char* topic, byte* payload, unsigned int len) {
