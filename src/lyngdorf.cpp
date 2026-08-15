@@ -36,6 +36,14 @@ static const char* SOURCE_NAMES[] = {
   "Analog 1", "Analog 2", "Analog 3", "Analog 4", "Analog 5", "Analog 6 (XLR)"
 };
 static const int SOURCE_COUNT = sizeof(SOURCE_NAMES) / sizeof(SOURCE_NAMES[0]);
+static const int SOURCE_ANALOG_1 = 12;   // the only input with a "Home Cinema" mode
+
+// "Home Cinema" probe: on switching to Analog 1, send !VOLUP and see whether
+// the amp replies with an updated !VOL(...) within HOME_CINEMA_PROBE_MS. See
+// the comment on LyngdorfState::homeCinemaKnown in lyngdorf.h.
+static bool     homeCinemaProbeActive = false;
+static uint32_t homeCinemaProbeSentAt = 0;
+static const uint32_t HOME_CINEMA_PROBE_MS = 400;
 
 // Appendix B: voicing numbering (index 0..13).
 static const char* VOICING_NAMES[] = {
@@ -221,10 +229,31 @@ static void parseLine(String s) {
     int v = val.toInt();
     changed = !lyngState.volKnown || lyngState.volume != v;
     lyngState.volume = v; lyngState.volKnown = true;
+    if (homeCinemaProbeActive) {
+      // The amp replied, so volume isn't fixed here — revert the probe's
+      // own !VOLUP bump before anyone notices it.
+      homeCinemaProbeActive = false;
+      lyngdorfSend("!VOLDN");
+      lyngState.homeCinemaKnown = true;
+      lyngState.homeCinema = false;
+      changed = true;
+    }
   } else if (key == "SRC") {
     int n = val.toInt();
-    changed = !lyngState.srcKnown || lyngState.source != n;
+    bool srcChanged = !lyngState.srcKnown || lyngState.source != n;
     lyngState.source = n; lyngState.srcKnown = true;
+    changed = srcChanged;
+    if (srcChanged) {
+      homeCinemaProbeActive = false;  // a pending probe no longer applies to the old source
+      if (n == SOURCE_ANALOG_1) {
+        lyngState.homeCinemaKnown = false;
+        lyngdorfSend("!VOLUP");
+        homeCinemaProbeActive = true;
+        homeCinemaProbeSentAt = millis();
+      } else if (lyngState.homeCinemaKnown) {
+        lyngState.homeCinemaKnown = false;
+      }
+    }
   } else if (key == "VOI") {
     int n = val.toInt();
     changed = !lyngState.voiKnown || lyngState.voicing != n;
@@ -275,5 +304,13 @@ void lyngdorfLoop() {
       lineBuf += (char)b;
       if (lineBuf.length() > 250) lineBuf = "";  // overflow guard
     }
+  }
+
+  if (homeCinemaProbeActive && millis() - homeCinemaProbeSentAt > HOME_CINEMA_PROBE_MS) {
+    // No !VOL(...) reply arrived in time — volume is fixed on this input.
+    homeCinemaProbeActive = false;
+    lyngState.homeCinemaKnown = true;
+    lyngState.homeCinema = true;
+    if (stateCb) stateCb();
   }
 }

@@ -36,6 +36,7 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
   input[type=range]{width:100%;padding:0}
   h3{margin:18px 0 8px}
   button.active{background:#16a34a}
+  button:disabled,input:disabled{opacity:.35;cursor:not-allowed}
 </style></head><body>
 <header>Lyngdorf TDAI-2170 &mdash; debug</header>
 <div class="wrap">
@@ -45,8 +46,8 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
   <div>
     <button onclick="cmd('!PWR')">Power</button>
     <button onclick="cmd('!MUTE')">Mute</button>
-    <button class="sec" onclick="cmd('!VOLDN')">Vol &minus;</button>
-    <button class="sec" onclick="cmd('!VOLUP')">Vol +</button>
+    <button class="sec" id="volDnBtn" onclick="cmd('!VOLDN')">Vol &minus;</button>
+    <button class="sec" id="volUpBtn" onclick="cmd('!VOLUP')">Vol +</button>
     <button class="sec" onclick="cmd('!SRCDN')">Src &lt;</button>
     <button class="sec" onclick="cmd('!SRCUP')">Src &gt;</button>
     <button class="sec" onclick="cmd('!VOIDN')">Voi &lt;</button>
@@ -127,10 +128,13 @@ async function tick(){
       card('Amp model',s.amp.device)+
       card('Audio format',s.amp.audio_format)+
       card('Audio level',s.amp.audio_level_db)+
+      card('Home Cinema',s.amp.home_cinema)+
       card('Uptime',fmtUp(s.uptime_s))+
       card('Last reboot',s.last_reset)+
       card('Last WiFi drop',s.last_wifi_drop);
     if(!volDragging && s.amp.volume_db!=='?'){volslider.value=s.amp.volume_db;volLabel()}
+    let volFixed=s.amp.home_cinema==='yes';
+    volslider.disabled=volFixed; volUpBtn.disabled=volFixed; volDnBtn.disabled=volFixed;
     for(let i=0;i<SOURCES.length;i++){
       let b=document.getElementById('src'+i);
       if(b)b.classList.toggle('active',s.amp.source===SOURCES[i]);
@@ -215,6 +219,7 @@ static void handleState(WebServer* s) {
   a["audio_level_db"] = lyngState.audioKnown
       ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
       : "?";
+  a["home_cinema"] = lyngState.homeCinemaKnown ? (lyngState.homeCinema ? "yes" : "no") : "no";
 
   String out; serializeJson(d, out);
   s->send(200, "application/json", out);

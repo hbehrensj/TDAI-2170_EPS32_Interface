@@ -29,6 +29,7 @@ static String toolGetState() {
   d["audio_level_db"] = lyngState.audioKnown
       ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
       : "unknown";
+  d["home_cinema"] = lyngState.homeCinemaKnown ? (lyngState.homeCinema ? "yes" : "no") : "no";
   String out; serializeJson(d, out); return out;
 }
 

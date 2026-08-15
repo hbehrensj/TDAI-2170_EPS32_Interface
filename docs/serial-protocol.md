@@ -95,6 +95,55 @@ Notes:
 Subscription mode stays active until power is removed or the matching
 unsubscribe command is received.
 
+## Undocumented findings (not in the official manual)
+
+Not in the official *External Control Manual* — found by protocol sniffing,
+reverse-engineering the official Android app, and live testing against
+actual hardware. See `src/lyngdorf.cpp` for the full derivation notes.
+
+### `!AUDIOSTATUS(bitDepthCode,sampleRateCode,levelDb)` — async status
+
+Pushed automatically whenever the incoming audio format changes (`!AUDIOSTATUS?`
+also works as a request). `levelDb` is a live signal level in 0.1 dB units
+(-999 = silence) and updates many times/sec; the two format codes only change
+when the actual format changes.
+
+**Bit depth codes:**
+
+| Code | Meaning | Code | Meaning |
+| ---- | ------- | ---- | ------- |
+| 1    | PCM     | 6-10 | DSD     |
+| 2    | 16-bit  | 19   | PCM ADC |
+| 3    | DSD     |      |         |
+| 4    | 24-bit  |      |         |
+| 5    | 32-bit  |      |         |
+
+**Sample rate codes:**
+
+| Code | Meaning   | Code | Meaning                                      |
+| ---- | --------- | ---- | --------------------------------------------- |
+| 4    | 22.05 kHz | 14   | 176.4 kHz                                     |
+| 5    | 32 kHz    | 15   | 192 kHz                                       |
+| 7    | 44.1 kHz  | 16   | DSD64                                         |
+| 9    | 48 kHz    | 17   | DSD128 (also seen for out-of-spec 256x/512x)  |
+| 12   | 88.2 kHz  |      |                                                |
+| 13   | 96 kHz    |      |                                                |
+
+Confirmed live against this TDAI-2170 unit for every code above. Codes
+1/3/6-10/19 and 16/17 diverge from the official Android app's generic
+lookup table (shared across Lyngdorf/Steinway's whole product line) — this
+unit's own live behavior was trusted over the app's table where they disagreed.
+
+### Home Cinema (fixed volume) detection on Analog 1
+
+Analog 1 is the only input that supports Lyngdorf's "Home Cinema" mode — a
+fixed/passthrough volume setting for using the TDAI-2170 as a power amp fed
+by an AVR's pre-out. There's no documented status command for whether it's
+enabled. The firmware detects it by probing: on switching to Analog 1, it
+sends `!VOLUP` and checks whether the amp replies with an updated `!VOL(...)`
+within 400 ms. No reply means fixed volume; a reply is immediately reverted
+with `!VOLDN` so the probe has no lasting side effect.
+
 ## Appendix A: Input source numbering
 
 | # | Source                          | # | Source                            |

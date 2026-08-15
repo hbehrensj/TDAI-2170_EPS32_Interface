@@ -102,6 +102,14 @@ static void publishDiscovery() {
     d["entity_category"] = "diagnostic";
     publishConfig("sensor", "audio_format", d);
   }
+  {  // Diagnostic: Analog 1's "Home Cinema" (fixed volume) mode, "yes"/"no"/"unknown"
+    JsonDocument d;
+    d["name"] = "Home Cinema";
+    d["state_topic"] = tState("home_cinema");
+    d["icon"] = "mdi:volume-lock";
+    d["entity_category"] = "diagnostic";
+    publishConfig("sensor", "home_cinema", d);
+  }
   {  // Diagnostic: why the device last rebooted
     JsonDocument d;
     d["name"] = "Last reboot reason";
@@ -141,6 +149,10 @@ void mqttPublishState() {
     String fmt = lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode);
     mqtt.publish(tState("audio_format").c_str(), fmt.c_str(), true);
   }
+  // Always published (not gated on "known") so switching away from Analog 1
+  // promptly clears a stale yes/no back to unknown.
+  mqtt.publish(tState("home_cinema").c_str(),
+               lyngState.homeCinema ? "yes" : "no", true);
 }
 
 static void onMessage(char* topic, byte* payload, unsigned int len) {

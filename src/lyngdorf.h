@@ -23,6 +23,16 @@ struct LyngdorfState {
   int  audioBitDepthCode   = -1;
   int  audioSampleRateCode = -1;
   int  audioLevelDb        = -999;
+
+  // Whether the currently selected Analog 1 input is configured for
+  // Lyngdorf's "Home Cinema" mode (fixed/passthrough volume, for using this
+  // amp as a power amp fed by an AVR's pre-out — Analog 1 is the only input
+  // that supports it). Detected by probing on every switch to Analog 1: send
+  // !VOLUP and see whether the amp replies with an updated !VOL(...) within
+  // a short timeout (see lyngdorfLoop() in lyngdorf.cpp). Only meaningful
+  // while source == Analog 1; reset to unknown on any other source.
+  bool homeCinemaKnown = false;
+  bool homeCinema      = false;
 };
 
 extern LyngdorfState lyngState;

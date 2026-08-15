@@ -115,7 +115,11 @@ Config mode is entered when:
 - [x] Home Assistant MQTT discovery (Power, Mute, Volume, Source, Voicing,
       RoomPerfect entities)
 - [x] Runtime MQTT configuration from the web UI (no recompile / re-portal needed)
-- [x] Browser debug UI with live state + UART log
+- [x] Decodes the undocumented `!AUDIOSTATUS` async status (bit depth / sample
+      rate, including DSD) — see [docs/serial-protocol.md](docs/serial-protocol.md)
+- [x] Detects Analog 1's "Home Cinema" (fixed-volume passthrough) mode
+- [x] Browser debug UI with live state, UART log, a volume slider, and
+      per-source buttons
 - [x] **OTA (over-the-air) firmware updates** over WiFi (espota)
 - [x] Status LED indicating mode (config / connecting / connected)
 - [x] **Self-update from GitHub releases** (see *Releases & self-update* below)
