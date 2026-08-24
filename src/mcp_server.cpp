@@ -26,8 +26,10 @@ static String toolGetState() {
   d["audio_format"] = lyngState.audioKnown
       ? lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode)
       : "unknown";
-  d["audio_level_db"] = lyngState.audioKnown
-      ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
+  // Peak since the amp was last powered on, not a live level — see the
+  // comment on audioPeakDb in lyngdorf.h.
+  d["audio_peak_db"] = lyngState.audioKnown
+      ? (lyngState.audioPeakDb <= -999 ? "silence" : String(lyngState.audioPeakDb / 10.0f, 1) + " dB")
       : "unknown";
   d["home_cinema"] = lyngState.homeCinemaKnown ? (lyngState.homeCinema ? "yes" : "no") : "no";
   String out; serializeJson(d, out); return out;

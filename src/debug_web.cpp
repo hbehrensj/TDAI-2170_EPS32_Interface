@@ -14,7 +14,7 @@
 static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TDAI-2170 debug</title>
+<title>TDAI-2170 Control</title>
 <style>
   body{font-family:system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
   header{padding:12px 16px;background:#171a21;font-weight:600}
@@ -38,7 +38,7 @@ static const char PAGE_HTML[] PROGMEM = R"HTML(<!doctype html>
   button.active{background:#16a34a}
   button:disabled,input:disabled{opacity:.35;cursor:not-allowed}
 </style></head><body>
-<header>Lyngdorf TDAI-2170 &mdash; debug</header>
+<header>Lyngdorf TDAI-2170 &mdash; Control</header>
 <div class="wrap">
   <h3>Status</h3>
   <div class="grid" id="status"></div>
@@ -127,7 +127,7 @@ async function tick(){
       card('Amp FW',s.amp.version)+
       card('Amp model',s.amp.device)+
       card('Audio format',s.amp.audio_format)+
-      card('Audio level',s.amp.audio_level_db)+
+      card('Audio peak (since power-on)',s.amp.audio_peak_db)+
       card('Home Cinema',s.amp.home_cinema)+
       card('Uptime',fmtUp(s.uptime_s))+
       card('Last reboot',s.last_reset)+
@@ -216,8 +216,10 @@ static void handleState(WebServer* s) {
   a["audio_format"] = lyngState.audioKnown
       ? lyngAudioFormatText(lyngState.audioBitDepthCode, lyngState.audioSampleRateCode)
       : "?";
-  a["audio_level_db"] = lyngState.audioKnown
-      ? (lyngState.audioLevelDb <= -999 ? "silence" : String(lyngState.audioLevelDb / 10.0f, 1) + " dB")
+  // Peak since the amp was last powered on, not a live level — see the
+  // comment on audioPeakDb in lyngdorf.h.
+  a["audio_peak_db"] = lyngState.audioKnown
+      ? (lyngState.audioPeakDb <= -999 ? "silence" : String(lyngState.audioPeakDb / 10.0f, 1) + " dB")
       : "?";
   a["home_cinema"] = lyngState.homeCinemaKnown ? (lyngState.homeCinema ? "yes" : "no") : "no";
 

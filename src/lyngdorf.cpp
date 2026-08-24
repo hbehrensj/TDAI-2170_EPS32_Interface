@@ -272,15 +272,16 @@ static void parseLine(String s) {
     if (c1 > 0 && c2 > c1) {
       int bitDepthCode   = val.substring(0, c1).toInt();
       int sampleRateCode = val.substring(c1 + 1, c2).toInt();
-      int levelDb        = val.substring(c2 + 1).toInt();
-      // Only a format change (not the level, which updates many times/sec)
-      // counts as "changed" — the level is polled via /api/state, not pushed.
+      int peakDb         = val.substring(c2 + 1).toInt();
+      // Only a format change counts as "changed" — the peak (see the
+      // comment on audioPeakDb in lyngdorf.h) isn't worth waking listeners
+      // for either; it's polled via /api/state, not pushed.
       changed = !lyngState.audioKnown ||
                 lyngState.audioBitDepthCode   != bitDepthCode ||
                 lyngState.audioSampleRateCode != sampleRateCode;
       lyngState.audioBitDepthCode   = bitDepthCode;
       lyngState.audioSampleRateCode = sampleRateCode;
-      lyngState.audioLevelDb        = levelDb;
+      lyngState.audioPeakDb         = peakDb;
       lyngState.audioKnown          = true;
     }
   }

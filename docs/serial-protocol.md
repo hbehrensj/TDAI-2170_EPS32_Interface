@@ -101,12 +101,19 @@ Not in the official *External Control Manual* — found by protocol sniffing,
 reverse-engineering the official Android app, and live testing against
 actual hardware. See `src/lyngdorf.cpp` for the full derivation notes.
 
-### `!AUDIOSTATUS(bitDepthCode,sampleRateCode,levelDb)` — async status
+### `!AUDIOSTATUS(bitDepthCode,sampleRateCode,peakDb)` — async status
 
-Pushed automatically whenever the incoming audio format changes (`!AUDIOSTATUS?`
-also works as a request). `levelDb` is a live signal level in 0.1 dB units
-(-999 = silence) and updates many times/sec; the two format codes only change
-when the actual format changes.
+Pushed automatically whenever a new peak (or a format change) occurs
+(`!AUDIOSTATUS?` also works as a request). `peakDb` is 0.1 dB units, -999 =
+silence — **but this is a peak-hold value, not a live level.** Confirmed
+2026-08-15 by watching it during playback: it only ever rises (tracking the
+loudest moment seen), never falls back down through quiet passages, and only
+resets to -999 on an amp power cycle (off then on). Active polling doesn't
+get anything fresher either — between actual new peaks, the amp just returns
+the same held value. No live/instantaneous level or VU-meter-style attribute
+is known to exist on this protocol; a few plausible undocumented request
+names (`!LEVEL?`, `!METER?`, `!PEAK?`, `!VU?`, etc.) were tried live and none
+replied.
 
 **Bit depth codes:**
 

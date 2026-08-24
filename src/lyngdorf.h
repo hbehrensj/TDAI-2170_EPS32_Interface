@@ -16,13 +16,24 @@ struct LyngdorfState {
 
   // !AUDIOSTATUS(bitDepthCode, sampleRateCode, levelDb) — undocumented async
   // status (not in the official manual); see lyngAudioSampleRateName/
-  // lyngAudioBitDepthName. levelDb is 0.1 dB units, -999 = silence, updates
-  // many times/sec so it deliberately does NOT trigger the state-changed
-  // callback on its own (only a bit-depth/sample-rate change does).
+  // lyngAudioBitDepthName. levelDb is 0.1 dB units, -999 = silence.
+  //
+  // NOT a live/instantaneous level — confirmed 2026-08-15 by watching it
+  // live while music played: it only ever rises (tracking the loudest
+  // moment seen), never falls back down even through quiet passages, and
+  // only resets to -999 on an amp power cycle (off then on). It's a peak
+  // hold since power-on, not a VU/RMS meter. That also explains the
+  // irregular push timing measured the same day (195ms-4.3s between
+  // updates, median ~430ms) — the amp only pushes a new one when a new
+  // peak is actually set, not on a fixed clock; active polling faster than
+  // that just re-reads the same held value. Named audioPeakDb accordingly.
+  // Deliberately does not trigger the state-changed callback on its own
+  // (only a bit-depth/sample-rate change does) — a UI wanting it has to
+  // poll /api/state itself.
   bool audioKnown = false;
   int  audioBitDepthCode   = -1;
   int  audioSampleRateCode = -1;
-  int  audioLevelDb        = -999;
+  int  audioPeakDb         = -999;
 
   // Whether the currently selected Analog 1 input is configured for
   // Lyngdorf's "Home Cinema" mode (fixed/passthrough volume, for using this

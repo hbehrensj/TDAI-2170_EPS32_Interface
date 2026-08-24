@@ -4,7 +4,7 @@ A WiFi-to-Serial adapter built on an **ESP32-S2 Mini**, used to control a
 **Lyngdorf TDAI-2170** integrated amplifier over its RS232 serial interface —
 wirelessly over WiFi. It also runs an **embedded MCP server** so the amplifier
 can be controlled directly from an MCP client / AI agent, a **Home Assistant**
-MQTT integration, a browser debug UI, and **over-the-air (OTA) firmware updates**.
+MQTT integration, a browser control UI, and **over-the-air (OTA) firmware updates**.
 
 ## Goals
 
@@ -118,8 +118,8 @@ Config mode is entered when:
 - [x] Decodes the undocumented `!AUDIOSTATUS` async status (bit depth / sample
       rate, including DSD) — see [docs/serial-protocol.md](docs/serial-protocol.md)
 - [x] Detects Analog 1's "Home Cinema" (fixed-volume passthrough) mode
-- [x] Browser debug UI with live state, UART log, a volume slider, and
-      per-source buttons
+- [x] Browser control UI with live state, full amp control (volume slider,
+      per-source buttons), and a UART protocol log
 - [x] **OTA (over-the-air) firmware updates** over WiFi (espota)
 - [x] Status LED indicating mode (config / connecting / connected)
 - [x] **Self-update from GitHub releases** (see *Releases & self-update* below)
@@ -183,8 +183,9 @@ The IP is also printed over USB serial at boot, and the DHCP hostname is `tdai21
 
 ### Endpoints once connected
 
-- **HTTP `:80` `/`** — browser **debug UI**: live state, UART protocol log, quick
-  commands and a raw-command box. Great for first-time bring-up. Disable with
+- **HTTP `:80` `/`** — browser **control UI**: full amp control (volume slider,
+  source buttons, quick commands, raw-command box), live state, and a UART
+  protocol log. Also great for first-time bring-up. Disable with
   `-D ENABLE_DEBUG_WEB=0`.
 - **TCP `:4001`** — point the official Lyngdorf app here (raw serial bridge).
 - **HTTP `:80` `/mcp`** — MCP JSON-RPC endpoint for AI agents / MCP clients.
@@ -234,7 +235,7 @@ for update**), which shows the current version on the status grid.
 
 - ✅ Hardware built (ESP32-S2 + TTL↔RS232 + RJ12), amp verified
 - ✅ WiFi bridge (TCP :4001), captive-portal config, mDNS, auto-reconnect
-- ✅ MCP server (`/mcp`), Home Assistant MQTT discovery, browser debug UI
+- ✅ MCP server (`/mcp`), Home Assistant MQTT discovery, browser control UI
 - ✅ OTA firmware updates (espota) + self-update from GitHub releases
 
 ## License
